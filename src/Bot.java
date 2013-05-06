@@ -1,3 +1,6 @@
+// TODO
+// Move commands into seperate class files.
+// Make more modular. e.g. load class files from a dir
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
@@ -141,12 +144,12 @@ public class Bot extends PircBot {
 				sendMessage(chan, ShortenURL(args[1]));
 			} else { sendMessage(chan, "There is no URL to Shorten"); }
 			
-		} else if(cmd.contains(".add")) {
+		} else if(cmd.contains(".add")) { 
 			String[] args = cmd.split(" ");
 			if(checkAdmin(sender)) {
 				switch(args[1]) {
 					case "tits":
-						try {
+						try { // TODO check file for duplicates. 
 							FileWriter pw = new FileWriter("tits.txt",true);
 							BufferedWriter bw = new BufferedWriter(pw);
 							bw.newLine();
@@ -181,7 +184,7 @@ public class Bot extends PircBot {
 		
 		} else if (cmd.contains(".identify")) {
 			if(checkAdmin(sender)) {
-				this.identify("zombies");
+				this.identify("zombies"); // TODO Make config option in admin.txt e.g. each admin should have their own PW
 			} else {
 				sendMessage(chan, "Fak Aff. Still not special enough!");
 			}
@@ -195,8 +198,8 @@ public class Bot extends PircBot {
 		String msg = "";
 		
 		switch(args[1]) {
-			case "chachin":
-				msg = "There is no help for chachin. He is a poor lost soul! :(";
+			case "chachin": // TODO add a shitlist file so this isn't hard coded in
+				msg = "There is no help for chachin. He is a poor lost soul! :("; 
 				break;
 			
 			case "cmds":
@@ -245,7 +248,7 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String ShortenURL(String LongURL) {
+	private String ShortenURL(String LongURL) { // TODO FIX IT ALL
 		/*//url aint working look into it
 		String googURL = "https://www.googleapis.com/urlshortener/v1/url?key=AIzaSyBdMcLKfQrYqL-8FCtwe0PZU9z2GGmdvPw";
 		
