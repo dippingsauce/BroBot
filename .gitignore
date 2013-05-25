@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> d7cc0ca2cc67b1a9256d174673dfda5d55046994
 #################
 ## Eclipse
 #################
@@ -161,3 +165,14 @@ pip-log.txt
 
 # Mac crap
 .DS_Store
+<<<<<<< HEAD
+=======
+=======
+*.class
+
+# Package Files #
+*.jar
+*.war
+*.ear
+>>>>>>> Initial commit
+>>>>>>> d7cc0ca2cc67b1a9256d174673dfda5d55046994
