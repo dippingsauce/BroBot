@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # BroBot
 BroBot: Your Bro on IRC
 
@@ -34,3 +35,9 @@ you read this file, at least twice.
 
 - - -
 
+=======
+BroBot
+======
+
+BroBot: Your Bro on IRC
+>>>>>>> Initial commit
