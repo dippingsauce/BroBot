@@ -40,7 +40,7 @@ public class Bot extends PircBot {
 	
 	private Map<String,String> cmds;
 	public Bot() {
-		this.setName("BroBot");
+		this.setName("Pr0nBot");
 		cmds = new HashMap<String, String>();
 		cmds.put(".help","");
 		cmds.put(".cmds", "Shows list of commands.");
