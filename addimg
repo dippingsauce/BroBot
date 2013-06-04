@@ -1,0 +1,6 @@
+#!/bin/bash
+echo "" >> tits.txt
+    for ARG in "$@"
+    do
+        echo $ARG >> tits.txt
+    done
