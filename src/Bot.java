@@ -1,17 +1,19 @@
-// TODO
-// Move commands into seperate class files.
-// Make more modular. e.g. load class files from a dir
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.Console;
 import java.io.DataInputStream;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.MalformedURLException;
@@ -39,26 +41,61 @@ import org.jibble.pircbot.PircBot;
 public class Bot extends PircBot {
 	
 	private Map<String,String> cmds;
+	private List<Links> LinkList = new ArrayList<Links>();
+	
 	public Bot() {
-		this.setName("Pr0nBot");
+		this.setName("BroBot");
 		cmds = new HashMap<String, String>();
 		cmds.put(".help","");
 		cmds.put(".cmds", "Shows list of commands.");
 		cmds.put(".nsfw", "Gives you some fun nsfw");
 		cmds.put(".shorten", "Shortens URLS using goo.gl");
 		cmds.put(".add", "Name says it all, type .add help for more information");
-		cmds.put(".identify", "Identifies nick");
+		cmds.put(".identify", "Identifies bot nick");
+		cmds.put(".brolinx", "Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
+		cmds.put(".count", "Shows the count of all the links in the 'database'");
+		
+		File f = new File("links.txt");
+		if(f.exists() && f.length() != 0) {
+			try{
+				FileInputStream fis = new FileInputStream("links.txt");
+				ObjectInputStream instream = new ObjectInputStream(fis);
+				LinkList = (ArrayList<Links>) instream.readObject();
+				instream.close();
+				fis.close();
+				
+			} catch (FileNotFoundException fnfe) {
+				fnfe.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+		} else if(!f.exists()){
+			try {
+				f.createNewFile();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 	}
 	
 	public void onDisconnect() {
 		while(this.isConnected() == false) {
 				try {
+					Thread.sleep(5000);
 					this.reconnect();
 				} catch (NickAlreadyInUseException naiue) {
 					this.changeNick("needtofigureouthowtoghostwithbot");
 				} catch (IOException ioe) {
 					ioe.printStackTrace();
 				} catch (IrcException ie) {
+					ie.printStackTrace();
+				} catch(InterruptedException ie) {
 					ie.printStackTrace();
 				}
 		}
@@ -77,7 +114,7 @@ public class Bot extends PircBot {
 			}
 			return;
 		}
-		
+				
 		//use this for regular commands to keep it nice and clean
 		if(cmds.containsKey(message.split(" ")[0])) {
 			doCommand(message,channel,sender);
@@ -122,7 +159,7 @@ public class Bot extends PircBot {
 	
 	public void onConnect() {
 		this.identify("zombies");
-		this.joinChannel("#zombienation");
+		this.joinChannel("#thezoo");
 	}
 	
 	private void doCommand(String cmd, String chan, String sender) {
@@ -138,26 +175,49 @@ public class Bot extends PircBot {
 		} else if(cmd.equals(".nsfw")) {
 			sendMessage(chan, getNSFW());
 			
+		} else if(cmd.contains(".brolinx")) {
+			String[] args = cmd.split(" ");
+			if(args.length > 1 && !args[1].isEmpty()) {
+				sendMessage(chan, getBrolinx(args[1]));
+			} else {
+				sendMessage(chan, getBrolinx());
+			}
 		} else if(cmd.contains(".shorten")) {
+
 			String[] args = cmd.split(" ");
 			if(args[1] != "") {
 				sendMessage(chan, ShortenURL(args[1]));
 			} else { sendMessage(chan, "There is no URL to Shorten"); }
 			
-		} else if(cmd.contains(".add")) { 
+		} else if(cmd.contains(".add")) {
 			String[] args = cmd.split(" ");
 			if(checkAdmin(sender)) {
 				switch(args[1]) {
 					case "tits":
-						try { // TODO check file for duplicates. 
+						try {
+							/* old method
 							FileWriter pw = new FileWriter("tits.txt",true);
 							BufferedWriter bw = new BufferedWriter(pw);
 							bw.newLine();
 							bw.append(args[2]);
 							bw.close();
 							pw.close();
+							*/
+							Links l = new Links(Links.SourceCategory.NSFW,args[2]);
+							if(DupeCheck(l.getLink())) {
+								LinkList.add(l);
+							} else {
+								sendMessage(chan, "This link is already in the database. Please try a different link.");
+								return;
+							}
 							
-							sendMessage(chan, "nsfw added!");
+							
+							if(SaveList() == true) {
+								sendMessage(chan, "nsfw added!");
+							} else {
+								sendMessage(chan, "Tits Exploded! Retry perhaps?");
+							}
+							
 						} catch (Exception ex) {
 							sendMessage(chan, "There was an error reading tits");
 						}
@@ -177,6 +237,23 @@ public class Bot extends PircBot {
 							sendMessage(chan, "There was an error reading admins");
 						}
 						break;
+						
+					case "brolinx":
+						try {
+							Links l = new Links(Links.SourceCategory.YOUTUBE,args[2]);
+							if(args[3] != null) {
+								l.setArgs(args[3]);
+							}
+							
+							LinkList.add(l);
+							if(SaveList() == true) {
+								sendMessage(chan, "Broin' Out...SUCCESSFUL!");
+							}
+							
+						} catch (Exception e) {
+							sendMessage(chan, "Fucking errors!");
+						}
+						break;
 				}
 			} else {
 				sendMessage(chan, "You cannot use this command. NOT SPECIAL ENOUGH!");
@@ -184,22 +261,47 @@ public class Bot extends PircBot {
 		
 		} else if (cmd.contains(".identify")) {
 			if(checkAdmin(sender)) {
-				this.identify("zombies"); // TODO Make config option in admin.txt e.g. each admin should have their own PW
+				this.identify("zombies");
 			} else {
 				sendMessage(chan, "Fak Aff. Still not special enough!");
 			}
+			
+		} else if (cmd.contains(".count")) {
+			sendMessage(chan, "There are " + Integer.toString(getLinkCount(Links.SourceCategory.NSFW)) + " NSFW links, " + Integer.toString(getLinkCount(Links.SourceCategory.YOUTUBE)) + " Youtube links, and " + Integer.toString(getLinkCount(Links.SourceCategory.FUNNYS)) + " LOLOL links.");
 			
 		} else {
 			sendMessage(chan, "wha gwan me bredren! dis be an error!");
 		}			
 	}
 	
+	private int getLinkCount(Links.SourceCategory cat) {
+		int i = 0;
+		
+		for(Links l : LinkList) {
+			if(l.getCat() == cat) {
+				i++;
+			}
+		}
+		
+		return i;
+	}
+	
+	private Boolean DupeCheck(String link) {
+		for(Links l : LinkList) {
+			if(l.getLink().equalsIgnoreCase(link)) {
+				return false;
+			}
+		}
+		
+		return true;
+	}
+
 	private void showHelp(String[] args, String channel) {
 		String msg = "";
 		
 		switch(args[1]) {
-			case "chachin": // TODO add a shitlist file so this isn't hard coded in
-				msg = "There is no help for chachin. He is a poor lost soul! :("; 
+			case "chachin":
+				msg = "There is no help for chachin. He is a poor lost soul! :(";
 				break;
 			
 			case "cmds":
@@ -228,6 +330,7 @@ public class Bot extends PircBot {
 	
 	private String getNSFW() {
 		try {
+			/* old method
 			FileInputStream fstream = new FileInputStream("tits.txt");
 			DataInputStream dstream = new DataInputStream(fstream);
 			
@@ -240,6 +343,8 @@ public class Bot extends PircBot {
 			
 			dstream.close();
 			fstream.close();
+			*/
+			List<String> temp = ReturnList(Links.SourceCategory.NSFW);
 			
 			Random rand = new Random();
 			return temp.get(rand.nextInt(temp.size()));
@@ -248,7 +353,23 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String ShortenURL(String LongURL) { // TODO FIX IT ALL
+	private String getBrolinx(String... args) {
+		try {
+			List<String> temp;
+			if(args.length == 0) {
+				temp = ReturnList(Links.SourceCategory.YOUTUBE);
+			} else {
+				temp = ReturnList(Links.SourceCategory.YOUTUBE, args);
+			}
+			
+			Random rand = new Random();
+			return temp.get(rand.nextInt(temp.size()));
+		} catch (Exception ex) {
+			return ex.getMessage();
+		}
+	}
+	
+	private String ShortenURL(String LongURL) {
 		/*//url aint working look into it
 		String googURL = "https://www.googleapis.com/urlshortener/v1/url?key=AIzaSyBdMcLKfQrYqL-8FCtwe0PZU9z2GGmdvPw";
 		
@@ -304,5 +425,59 @@ public class Bot extends PircBot {
 		} catch(Exception ex) {
 			return false;
 		}
+	}
+	
+	private Boolean SaveList() {
+		try {
+			FileOutputStream fos = new FileOutputStream("links.txt");
+			ObjectOutputStream outstream = new ObjectOutputStream(fos);
+			outstream.writeObject(LinkList);
+			outstream.close();
+			fos.close();
+			return true;
+		} catch(FileNotFoundException e) {
+			e.printStackTrace();
+			return false;
+		} catch(IOException e) {
+			e.printStackTrace();
+			return false;
+		} catch(Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+	
+	private List<String> ReturnList (Links.SourceCategory cat, String... args) {
+		if(cat == Links.SourceCategory.NSFW) {
+			List<String> temp = new ArrayList<String>();
+			for(Links l:LinkList) {
+				if(l.getCat() == Links.SourceCategory.NSFW) {
+					temp.add(l.getLink());
+				}
+			}
+			
+			return temp;
+		} else if(cat == Links.SourceCategory.YOUTUBE) {
+			List<String> temp = new ArrayList<String>();
+			if(args.length > 0) {
+				for(Links l:LinkList) {
+					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
+						if(l.getArgs().equalsIgnoreCase(args[0])) {
+							temp.add(l.getLink());
+						}
+					}
+				}
+				return temp;
+			} else {
+				for(Links l:LinkList) {
+					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
+						temp.add(l.getLink());
+					}
+				}
+				return temp;
+			}
+		}
+		
+		return null;
 	}
 }
