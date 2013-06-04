@@ -1,9 +1,9 @@
-import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 
 import org.jibble.pircbot.*;
 
+@SuppressWarnings("unused")
 public class botMain {
 	
 	public static void main(String[] args) throws Exception {
@@ -13,19 +13,15 @@ public class botMain {
 		
 		try {
 			
-			brobot.connect("irc.digitalirc.org");
+			brobot.connect("irc.silentzombies.com");
 			
 		} catch(SocketException se) {
 			
-			while(brobot.isConnected() == false)
-			{
-				Thread.sleep(5000);
-				brobot.connect("irc.digitalirc.org");
-			}
+			brobot.connect("irc.digitalwizardry.org");
 			
 		} catch(UnknownHostException uhe) {
 			
-			brobot.connect("irc.digitalirc.org");
+			brobot.connect("irc.digitalwizardry.org");
 			
 		}
 	}
