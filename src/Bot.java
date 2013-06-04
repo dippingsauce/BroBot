@@ -50,10 +50,11 @@ public class Bot extends PircBot {
 		cmds.put(".cmds", "Shows list of commands.");
 		cmds.put(".nsfw", "Gives you some fun nsfw");
 		cmds.put(".shorten", "Shortens URLS using goo.gl");
-		cmds.put(".add", "Name says it all, type .add help for more information");
+		cmds.put(".add", "for nsfw (.add tits <link>); for brolinx (.add brolinx <link> <genre>(optional)) no spaces in the genre, only supports single genre for now");
 		cmds.put(".identify", "Identifies bot nick");
 		cmds.put(".brolinx", "Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
 		cmds.put(".count", "Shows the count of all the links in the 'database'");
+		cmds.put(".importnsfw", "This will import nsfw from file tits.txt");
 		
 		File f = new File("links.txt");
 		if(f.exists() && f.length() != 0) {
@@ -269,6 +270,44 @@ public class Bot extends PircBot {
 		} else if (cmd.contains(".count")) {
 			sendMessage(chan, "There are " + Integer.toString(getLinkCount(Links.SourceCategory.NSFW)) + " NSFW links, " + Integer.toString(getLinkCount(Links.SourceCategory.YOUTUBE)) + " Youtube links, and " + Integer.toString(getLinkCount(Links.SourceCategory.FUNNYS)) + " LOLOL links.");
 			
+		} else if(cmd.contains(".importnsfw")) {
+			if(checkAdmin(sender)) {
+				try{
+					FileInputStream fstream = new FileInputStream("tits.txt");
+					DataInputStream dstream = new DataInputStream(fstream);
+					
+					BufferedReader br = new BufferedReader(new InputStreamReader(dstream));
+					String link;
+					int counter = 0;
+					while ((link = br.readLine()) != null) {
+						if(DupeCheck(link)) {
+							Links l = new Links(Links.SourceCategory.NSFW, link);
+							LinkList.add(l);
+							counter++;
+						} 
+					}
+					
+					if(SaveList()) {
+						sendMessage(chan, Integer.toString(counter) + " Links imported successfully.");
+					} else {
+						sendMessage(chan, "There was a problem saving the list.");
+					}
+					
+					dstream.close();
+					fstream.close();
+					
+					if(counter > 0) {
+						FileOutputStream writer = new FileOutputStream("tits.txt");
+						writer.write((new String().getBytes()));
+						writer.close();
+					}
+					
+				} catch (Exception ex) {
+					sendMessage(chan, ex.getMessage());
+				}
+			} else {
+				sendMessage(chan, "Fak Aff. Still not special enough!");
+			}
 		} else {
 			sendMessage(chan, "wha gwan me bredren! dis be an error!");
 		}			
