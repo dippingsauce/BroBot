@@ -42,9 +42,53 @@ public class Bot extends PircBot {
 	
 	private Map<String,String> cmds;
 	private List<Links> LinkList = new ArrayList<Links>();
+	private List<Command> CmdList = new ArrayList<Command>();
 	
 	public Bot() {
 		this.setName("BroBot");
+		
+		
+		//Set all the commands (this is temporary i might throw this in the command class to clean things up)
+		Command c = new Command();
+		c.setCmdName(".help");
+		c.setDescription("This Command is to help users use the bot.");
+		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(true);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".commands");
+		c.setDescription("Gives you a list of all the valid commands");
+		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(true);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".nsfw");
+		c.setDescription("Sends a random nsfw link. FAP AWAY!");
+		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".shorten");
+		c.setDescription(".shorten <url> | Shortens specified URL using goo.gl");
+		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(true);
+		c.setEnabled(false);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".identify");
+		c.setDescription("Identifies the bot.");
+		c.setUserFlags(Command.Flags.MOD);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
 		cmds = new HashMap<String, String>();
 		cmds.put(".help","");
 		cmds.put(".cmds", "Shows list of commands.");
@@ -55,6 +99,7 @@ public class Bot extends PircBot {
 		cmds.put(".brolinx", "Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
 		cmds.put(".count", "Shows the count of all the links in the 'database'");
 		cmds.put(".importnsfw", "This will import nsfw from file tits.txt");
+		cmds.put(".exportlinks", "for all(.exportlinks all <filename>) for nsfw(.exportlinks nsfw <filename>) for brolinx(.exportlinks brolinx <filename>) Exports selected cateogry links to text file.");
 		
 		File f = new File("links.txt");
 		if(f.exists() && f.length() != 0) {
@@ -270,7 +315,48 @@ public class Bot extends PircBot {
 		} else if (cmd.contains(".count")) {
 			sendMessage(chan, "There are " + Integer.toString(getLinkCount(Links.SourceCategory.NSFW)) + " NSFW links, " + Integer.toString(getLinkCount(Links.SourceCategory.YOUTUBE)) + " Youtube links, and " + Integer.toString(getLinkCount(Links.SourceCategory.FUNNYS)) + " LOLOL links.");
 			
-		} else if(cmd.contains(".importnsfw")) {
+		} else if(cmd.contains(".exportlinks")) {
+			if(checkAdmin(sender)) {
+				String[] args = cmd.split(" ");				
+				try {
+					FileWriter pw = new FileWriter(args[2] + ".txt",true);
+					BufferedWriter bw = new BufferedWriter(pw);
+
+					switch(args[1]) {
+						case "nsfw":
+							for(Links l: LinkList){
+								if(l.getCat() == Links.SourceCategory.NSFW) {
+									bw.write(l.getLink());
+									bw.newLine();
+								}
+							}
+							break;
+							
+						case "brolinx":
+							for(Links l: LinkList){
+								if(l.getCat() == Links.SourceCategory.YOUTUBE) {
+									bw.write(l.getLink());
+									bw.newLine();
+								}
+							}
+							break;
+							
+						case "all":
+							for(Links l: LinkList){
+								bw.write(l.getLink());
+								bw.newLine();
+							}
+							break;
+					}
+					
+					bw.close();
+					pw.close();
+				} catch(Exception ex) {
+					sendMessage(chan, "Error somewhere along the way :(");
+				}
+			}
+		
+		}else if(cmd.contains(".importnsfw")) {
 			if(checkAdmin(sender)) {
 				try{
 					FileInputStream fstream = new FileInputStream("tits.txt");
