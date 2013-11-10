@@ -89,18 +89,45 @@ public class Bot extends PircBot {
 		c.setEnabled(true);
 		CmdList.add(c);
 		
+		c = new Command();
+		c.setCmdName(".add");
+		c.setDescription("for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
+		c.setUserFlags(Command.Flags.MOD);
+		c.setHidden(true);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".brolinx");
+		c.setDescription("Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
+		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".count");
+		c.setDescription("Shows the count of all the links in the 'database'");
+		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		
+		// deprecated way need to get this shit out
 		cmds = new HashMap<String, String>();
 		cmds.put(".help","");
 		cmds.put(".cmds", "Shows list of commands.");
 		cmds.put(".nsfw", "Gives you some fun nsfw");
 		cmds.put(".shorten", "Shortens URLS using goo.gl");
-		cmds.put(".add", "for nsfw (.add tits <link>); for brolinx (.add brolinx <link> <genre>(optional)) no spaces in the genre, only supports single genre for now");
+		cmds.put(".add", "for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
 		cmds.put(".identify", "Identifies bot nick");
 		cmds.put(".brolinx", "Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
 		cmds.put(".count", "Shows the count of all the links in the 'database'");
 		cmds.put(".importnsfw", "This will import nsfw from file tits.txt");
 		cmds.put(".exportlinks", "for all(.exportlinks all <filename>) for nsfw(.exportlinks nsfw <filename>) for brolinx(.exportlinks brolinx <filename>) Exports selected cateogry links to text file.");
 		
+		//imports database file into object list
 		File f = new File("links.txt");
 		if(f.exists() && f.length() != 0) {
 			try{
@@ -150,6 +177,7 @@ public class Bot extends PircBot {
 	
 	public void onMessage(String channel, String sender, String login, 
 						String hostname, String message) {
+		//deprecated need to update onMessage
 		//test for help, we are going about it differently
 		if(message.startsWith(".help")) {
 			String[] args = message.split(" ");
@@ -176,7 +204,7 @@ public class Bot extends PircBot {
 		 */
 		String pattern = "(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)[a-zA-Z0-9-_]{11}(&(.+))?";
 		Pattern compiledPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
-		if(message.matches(compiledPattern.toString())) {
+		if(message.trim().matches(compiledPattern.toString())) {
 			try {
 				URL url = new URL(message);
 				URLConnection conn = url.openConnection();
