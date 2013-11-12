@@ -13,19 +13,19 @@ public class botMain {
 		
 		try {
 			
-			brobot.connect("irc.digitalirc.org");
+			brobot.connect(brobot.botSettings.getProperty("irc_server"),Integer.parseInt(brobot.botSettings.getProperty("server_port")));
 			
 		} catch(SocketException se) {
 			
 			while(brobot.isConnected() == false)
 			{
 				Thread.sleep(5000);
-				brobot.connect("irc.digitalirc.org");
+				brobot.connect(brobot.botSettings.getProperty("irc_server"),Integer.parseInt(brobot.botSettings.getProperty("server_port")));
 			}
 			
 		} catch(UnknownHostException uhe) {
 			
-			brobot.connect("irc.digitalirc.org");
+			brobot.connect(brobot.botSettings.getProperty("irc_server"),Integer.parseInt(brobot.botSettings.getProperty("server_port")));
 			
 		}
 	}

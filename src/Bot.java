@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
 import java.util.regex.Matcher;
@@ -43,9 +44,31 @@ public class Bot extends PircBot {
 	private Map<String,String> cmds;
 	private List<Links> LinkList = new ArrayList<Links>();
 	private List<Command> CmdList = new ArrayList<Command>();
+	public Properties botSettings = new Properties();
 	
 	public Bot() {
-		this.setName("BroBot");
+		//Load settings from config file
+		File f = new File("Config.ini");
+		if(f.exists() && f.length() > 0) {
+			try {
+				botSettings.load(new FileInputStream(f));
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		// check to make sure bot_nick is set right in the settings
+		// then set the name to it, if its not set correctly the name
+		// will be "propertyError"
+		if(botSettings.getProperty("bot_nick") != "") {
+			this.setName(botSettings.getProperty("bot_nick"));
+		} else {
+			this.setName("propertyError");
+		}
 		
 		
 		//Set all the commands (this is temporary i might throw this in the command class to clean things up)
@@ -128,7 +151,7 @@ public class Bot extends PircBot {
 		cmds.put(".exportlinks", "for all(.exportlinks all <filename>) for nsfw(.exportlinks nsfw <filename>) for brolinx(.exportlinks brolinx <filename>) Exports selected cateogry links to text file.");
 		
 		//imports database file into object list
-		File f = new File("links.txt");
+		f = new File("links.txt");
 		if(f.exists() && f.length() != 0) {
 			try{
 				FileInputStream fis = new FileInputStream("links.txt");
@@ -177,23 +200,16 @@ public class Bot extends PircBot {
 	
 	public void onMessage(String channel, String sender, String login, 
 						String hostname, String message) {
-		//deprecated need to update onMessage
-		//test for help, we are going about it differently
-		if(message.startsWith(".help")) {
-			String[] args = message.split(" ");
-			if(args.length > 1) {
-				showHelp(args, channel);
-			} else {
-				sendMessage(channel, "To get help with a specific command type .help *command*. To see a list of commands available type .cmds");
-			}
-			return;
-		}
-				
-		//use this for regular commands to keep it nice and clean
-		if(cmds.containsKey(message.split(" ")[0])) {
+
+		// This will confirm the incoming message is a command
+		if(message.startsWith(".")) {
+			//for whatever reason we cant have a loop in here so at this point
+			//we know it SHOULD be a command and will call a helper function
 			doCommand(message,channel,sender);
 		}
 		
+		
+		if(Boolean.parseBoolean(botSettings.getProperty("youtube_announce"))) {
 		/* regex alts
 		 * 
 		 * (http?s://)?(www\\.)?(youtube\\.com/|youtu\\.be/)watch\\?v=[a-zA-Z0-9-_]{11}
@@ -202,41 +218,51 @@ public class Bot extends PircBot {
 		 * 
 		 * https?:\\/\\/(?:[0-9A-Z-]+\\.)?(?:youtu\\.be\\/|youtube\\.com\\S*[^\\w\\-\\s])([\\w\\-]{11})(?=[^\\w\\-]|$)(?![?=&+%\\w]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w]*
 		 */
-		String pattern = "(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)[a-zA-Z0-9-_]{11}(&(.+))?";
-		Pattern compiledPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
-		if(message.trim().matches(compiledPattern.toString())) {
-			try {
-				URL url = new URL(message);
-				URLConnection conn = url.openConnection();
-				InputStream is = conn.getInputStream();
-				InputStreamReader isr = new InputStreamReader(is);
-				BufferedReader br = new BufferedReader(isr);
-				
-				HTMLEditorKit htmlkit = new HTMLEditorKit();
-				
-				HTMLDocument htmlDoc = (HTMLDocument) htmlkit.createDefaultDocument();
-				htmlkit.read(br, htmlDoc, 0);
-				
-				String title = (String) htmlDoc.getProperty(HTMLDocument.TitleProperty);
-				
-				sendMessage(channel, title);
-				
-				br.close();
-				isr.close();
-				is.close();
-			}
-			catch (Exception ex) {
-				System.out.print(ex.getCause() + "|| " + ex.getMessage());
+			String pattern = "(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)[a-zA-Z0-9-_]{11}(&(.+))?";
+			Pattern compiledPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+			if(message.trim().matches(compiledPattern.toString())) {
+				try {
+					URL url = new URL(message);
+					URLConnection conn = url.openConnection();
+					InputStream is = conn.getInputStream();
+					InputStreamReader isr = new InputStreamReader(is);
+					BufferedReader br = new BufferedReader(isr);
+					
+					HTMLEditorKit htmlkit = new HTMLEditorKit();
+					
+					HTMLDocument htmlDoc = (HTMLDocument) htmlkit.createDefaultDocument();
+					htmlkit.read(br, htmlDoc, 0);
+					
+					String title = (String) htmlDoc.getProperty(HTMLDocument.TitleProperty);
+					
+					sendMessage(channel, title);
+					
+					br.close();
+					isr.close();
+					is.close();
+				}
+				catch (Exception ex) {
+					System.out.print(ex.getCause() + "|| " + ex.getMessage());
+				}
 			}
 		}
 	}
 	
 	public void onConnect() {
-		this.identify("zombies");
-		this.joinChannel("#thezoo");
+		if(Boolean.parseBoolean(botSettings.getProperty("auto_identify"))) {
+			this.identify(botSettings.getProperty("bot_password"));
+		}
+		this.joinChannel("#" + botSettings.getProperty("bot_chan"));
 	}
 	
 	private void doCommand(String cmd, String chan, String sender) {
+		String[] args = cmd.split(" ");
+		for(Command c:CmdList) {
+			if(c.getCmdName() == args[0].toLowerCase()) {
+				cmd = args[0];
+			}
+		}
+
 		if(cmd.equals(".cmds")) {
 			
 			String msg = "";
@@ -250,21 +276,17 @@ public class Bot extends PircBot {
 			sendMessage(chan, getNSFW());
 			
 		} else if(cmd.contains(".brolinx")) {
-			String[] args = cmd.split(" ");
 			if(args.length > 1 && !args[1].isEmpty()) {
 				sendMessage(chan, getBrolinx(args[1]));
 			} else {
 				sendMessage(chan, getBrolinx());
 			}
 		} else if(cmd.contains(".shorten")) {
-
-			String[] args = cmd.split(" ");
 			if(args[1] != "") {
 				sendMessage(chan, ShortenURL(args[1]));
 			} else { sendMessage(chan, "There is no URL to Shorten"); }
 			
 		} else if(cmd.contains(".add")) {
-			String[] args = cmd.split(" ");
 			if(checkAdmin(sender)) {
 				switch(args[1]) {
 					case "tits":
@@ -344,8 +366,7 @@ public class Bot extends PircBot {
 			sendMessage(chan, "There are " + Integer.toString(getLinkCount(Links.SourceCategory.NSFW)) + " NSFW links, " + Integer.toString(getLinkCount(Links.SourceCategory.YOUTUBE)) + " Youtube links, and " + Integer.toString(getLinkCount(Links.SourceCategory.FUNNYS)) + " LOLOL links.");
 			
 		} else if(cmd.contains(".exportlinks")) {
-			if(checkAdmin(sender)) {
-				String[] args = cmd.split(" ");				
+			if(checkAdmin(sender)) {				
 				try {
 					FileWriter pw = new FileWriter(args[2] + ".txt",true);
 					BufferedWriter bw = new BufferedWriter(pw);
