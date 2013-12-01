@@ -23,6 +23,7 @@ import java.net.UnknownHostException;
 import java.nio.Buffer;
 import java.nio.CharBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,23 +45,11 @@ public class Bot extends PircBot {
 	private Map<String,String> cmds;
 	private List<Links> LinkList = new ArrayList<Links>();
 	private List<Command> CmdList = new ArrayList<Command>();
+	private Map<String,Command.Flags> UserLevels;
 	public Properties botSettings = new Properties();
 	
 	public Bot() {
-		//Load settings from config file
-		File f = new File("Config.ini");
-		if(f.exists() && f.length() > 0) {
-			try {
-				botSettings.load(new FileInputStream(f));
-			} catch (FileNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		
+		initData();
 		// check to make sure bot_nick is set right in the settings
 		// then set the name to it, if its not set correctly the name
 		// will be "propertyError"
@@ -70,8 +59,22 @@ public class Bot extends PircBot {
 			this.setName("propertyError");
 		}
 		
-		
-		//Set all the commands (this is temporary i might throw this in the command class to clean things up)
+		// deprecated way need to get this shit out
+		cmds = new HashMap<String, String>();
+		cmds.put(".cmds", "Shows list of commands.");
+		cmds.put(".nsfw", "Gives you some fun nsfw");
+		cmds.put(".shorten", "Shortens URLS using goo.gl");
+		cmds.put(".add", "for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
+		cmds.put(".identify", "Identifies bot nick");
+		cmds.put(".brolinx", "Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
+		cmds.put(".count", "Shows the count of all the links in the 'database'");
+		cmds.put(".importnsfw", "This will import nsfw from file tits.txt");
+		cmds.put(".exportlinks", "for all(.exportlinks all <filename>) for nsfw(.exportlinks nsfw <filename>) for brolinx(.exportlinks brolinx <filename>) Exports selected cateogry links to text file.");
+	}
+	
+	@SuppressWarnings("unchecked")
+	private void initData() {
+		// add all our commands to the CmdList (still need to think of the right place to put this)
 		Command c = new Command();
 		c.setCmdName(".help");
 		c.setDescription("This Command is to help users use the bot.");
@@ -136,30 +139,30 @@ public class Bot extends PircBot {
 		c.setEnabled(true);
 		CmdList.add(c);
 		
+		//Load settings from config file
+		File f = new File("Config.ini");
+		if(f.exists() && f.length() > 0) {
+			try {
+				botSettings.load(new FileInputStream(f));
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 		
-		// deprecated way need to get this shit out
-		cmds = new HashMap<String, String>();
-		cmds.put(".help","");
-		cmds.put(".cmds", "Shows list of commands.");
-		cmds.put(".nsfw", "Gives you some fun nsfw");
-		cmds.put(".shorten", "Shortens URLS using goo.gl");
-		cmds.put(".add", "for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
-		cmds.put(".identify", "Identifies bot nick");
-		cmds.put(".brolinx", "Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
-		cmds.put(".count", "Shows the count of all the links in the 'database'");
-		cmds.put(".importnsfw", "This will import nsfw from file tits.txt");
-		cmds.put(".exportlinks", "for all(.exportlinks all <filename>) for nsfw(.exportlinks nsfw <filename>) for brolinx(.exportlinks brolinx <filename>) Exports selected cateogry links to text file.");
-		
-		//imports database file into object list
+		//imports Links file into our LinkList
 		f = new File("links.txt");
 		if(f.exists() && f.length() != 0) {
 			try{
-				FileInputStream fis = new FileInputStream("links.txt");
+				FileInputStream fis = new FileInputStream(f);
 				ObjectInputStream instream = new ObjectInputStream(fis);
 				LinkList = (ArrayList<Links>) instream.readObject();
 				instream.close();
 				fis.close();
-				
+						
 			} catch (FileNotFoundException fnfe) {
 				fnfe.printStackTrace();
 			} catch (IOException e) {
@@ -169,7 +172,36 @@ public class Bot extends PircBot {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			
+					
+		} else if(!f.exists()){
+			try {
+				f.createNewFile();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		// Load users and levels from Users.txt
+		f = new File("users.txt");
+		if(f.exists() && f.length() != 0) {
+			try{
+				FileInputStream fis = new FileInputStream(f);
+				ObjectInputStream instream = new ObjectInputStream(fis);
+				UserLevels = (Map<String,Command.Flags>) instream.readObject();
+				instream.close();
+				fis.close();
+						
+			} catch (FileNotFoundException fnfe) {
+				fnfe.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+					
 		} else if(!f.exists()){
 			try {
 				f.createNewFile();
@@ -258,8 +290,23 @@ public class Bot extends PircBot {
 	private void doCommand(String cmd, String chan, String sender) {
 		String[] args = cmd.split(" ");
 		for(Command c:CmdList) {
-			if(c.getCmdName() == args[0].toLowerCase()) {
+			if(c.getCmdName().equals(args[0])) {
 				cmd = args[0];
+				
+				switch(args[0]) {
+					case ".help":
+						showHelp(args,chan);
+						break;
+					case ".nsfw":
+						if(args.length > 1)
+						{
+							sendMessage(chan,getNSFW(args));
+							break;
+						} else {
+							sendMessage(chan,getNSFW());
+							break;
+						}			
+				}
 			}
 		}
 
@@ -271,9 +318,6 @@ public class Bot extends PircBot {
 			}
 			msg = msg.substring(0, msg.length() - 1);
 			sendMessage(chan,msg);
-			
-		} else if(cmd.equals(".nsfw")) {
-			sendMessage(chan, getNSFW());
 			
 		} else if(cmd.contains(".brolinx")) {
 			if(args.length > 1 && !args[1].isEmpty()) {
@@ -291,16 +335,12 @@ public class Bot extends PircBot {
 				switch(args[1]) {
 					case "tits":
 						try {
-							/* old method
-							FileWriter pw = new FileWriter("tits.txt",true);
-							BufferedWriter bw = new BufferedWriter(pw);
-							bw.newLine();
-							bw.append(args[2]);
-							bw.close();
-							pw.close();
-							*/
 							Links l = new Links(Links.SourceCategory.NSFW,args[2]);
 							if(DupeCheck(l.getLink())) {
+								if(args.length > 3) {
+									l.setArgs(args[3]);
+								}
+								
 								LinkList.add(l);
 							} else {
 								sendMessage(chan, "This link is already in the database. Please try a different link.");
@@ -444,7 +484,7 @@ public class Bot extends PircBot {
 				sendMessage(chan, "Fak Aff. Still not special enough!");
 			}
 		} else {
-			sendMessage(chan, "wha gwan me bredren! dis be an error!");
+			sendMessage(chan, "When this doesnt send anymore i finished implementing the new commands system");
 		}			
 	}
 	
@@ -470,58 +510,37 @@ public class Bot extends PircBot {
 		return true;
 	}
 
+// ------------------- Functions for commands ------------------------------------	
 	private void showHelp(String[] args, String channel) {
-		String msg = "";
+		String msg = "Help requested! If you need help with a specific command; Try .help <command name> or .commands to see a list of available commands.";
 		
-		switch(args[1]) {
-			case "chachin":
-				msg = "There is no help for chachin. He is a poor lost soul! :(";
-				break;
-			
-			case "cmds":
-				msg = cmds.get("." + args[1]).toString();
-				break;
-				
-			case "nsfw":
-				msg = cmds.get("." + args[1]).toString();
-				break;
-				
-			case "shorten":
-				msg = cmds.get("." + args[1]).toString();
-				break;
-			
-			case "add":
-				msg = cmds.get("." + args[1]).toString();
-				break;
-			
-			default:
-				msg = "That is not a command! Type .cmds if you are confused.";
-				break;
+		if(args.length > 1) {
+			for(Command c:CmdList) {
+				if(c.getCmdName().endsWith(args[1])) {
+					msg = c.getDescription();
+				}
+			}
 		}
 		
 		sendMessage(channel,msg);
 	}
 	
-	private String getNSFW() {
+	private String getNSFW(String[]... args) {
 		try {
-			/* old method
-			FileInputStream fstream = new FileInputStream("tits.txt");
-			DataInputStream dstream = new DataInputStream(fstream);
+			List<String> temp = null;
 			
-			BufferedReader br = new BufferedReader(new InputStreamReader(dstream));
-			List<String> temp = new ArrayList<String>();
-			String link;
-			while ((link = br.readLine()) != null) {
-				temp.add(link);
+			if(args.length > 0) {
+				temp = ReturnList(Links.SourceCategory.NSFW, args);
+			} else {
+				temp = ReturnList(Links.SourceCategory.NSFW);
 			}
 			
-			dstream.close();
-			fstream.close();
-			*/
-			List<String> temp = ReturnList(Links.SourceCategory.NSFW);
-			
 			Random rand = new Random();
-			return temp.get(rand.nextInt(temp.size()));
+			if(!temp.isEmpty()) {
+				return temp.get(rand.nextInt(temp.size()));
+			}
+			
+			return "Unfortunately, I couldn't locate any links that were up your alley.";
 		} catch (Exception ex) {
 			return ex.getMessage();
 		}
@@ -541,6 +560,54 @@ public class Bot extends PircBot {
 		} catch (Exception ex) {
 			return ex.getMessage();
 		}
+	}
+	
+	private List<String> ReturnList (Links.SourceCategory cat, String[]... args) {
+		if(cat == Links.SourceCategory.NSFW) {
+			List<String> temp = new ArrayList<String>();
+			for(Links l:LinkList) {
+				if(l.getCat() == Links.SourceCategory.NSFW) {
+					if(args.length > 0) {
+						List<String> tags = new ArrayList<String>();
+						if(l.getArgs() != null) {
+							if(l.getArgs().contains(",")) {
+								tags = new ArrayList<String>(Arrays.asList(l.getArgs().toLowerCase().split(",")));
+							} else {
+								tags.add(l.getArgs().toLowerCase());
+							}
+						
+							if(tags.contains(args[0][1].toLowerCase())) {
+								temp.add(l.getLink());
+							}
+						}
+					} else {
+						temp.add(l.getLink());
+					}
+				}
+			}
+			return temp;
+		} else if(cat == Links.SourceCategory.YOUTUBE) {
+			List<String> temp = new ArrayList<String>();
+			if(args.length > 0) {
+				for(Links l:LinkList) {
+					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
+						if(l.getArgs().equalsIgnoreCase(args[0].toString())) {
+							temp.add(l.getLink());
+						}
+					}
+				}
+				return temp;
+			} else {
+				for(Links l:LinkList) {
+					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
+						temp.add(l.getLink());
+					}
+				}
+				return temp;
+			}
+		}
+		
+		return null;
 	}
 	
 	private String ShortenURL(String LongURL) {
@@ -621,37 +688,4 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private List<String> ReturnList (Links.SourceCategory cat, String... args) {
-		if(cat == Links.SourceCategory.NSFW) {
-			List<String> temp = new ArrayList<String>();
-			for(Links l:LinkList) {
-				if(l.getCat() == Links.SourceCategory.NSFW) {
-					temp.add(l.getLink());
-				}
-			}
-			
-			return temp;
-		} else if(cat == Links.SourceCategory.YOUTUBE) {
-			List<String> temp = new ArrayList<String>();
-			if(args.length > 0) {
-				for(Links l:LinkList) {
-					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
-						if(l.getArgs().equalsIgnoreCase(args[0])) {
-							temp.add(l.getLink());
-						}
-					}
-				}
-				return temp;
-			} else {
-				for(Links l:LinkList) {
-					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
-						temp.add(l.getLink());
-					}
-				}
-				return temp;
-			}
-		}
-		
-		return null;
-	}
 }
