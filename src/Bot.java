@@ -45,7 +45,7 @@ public class Bot extends PircBot {
 	private Map<String,String> cmds;
 	private List<Links> LinkList = new ArrayList<Links>();
 	private List<Command> CmdList = new ArrayList<Command>();
-	private Map<String,Command.Flags> UserLevels;
+	private Map<String,Command.Flags> UserLevels = new HashMap<String,Command.Flags>();
 	public Properties botSettings = new Properties();
 	
 	public Bot() {
@@ -61,13 +61,6 @@ public class Bot extends PircBot {
 		
 		// deprecated way need to get this shit out
 		cmds = new HashMap<String, String>();
-		cmds.put(".cmds", "Shows list of commands.");
-		cmds.put(".nsfw", "Gives you some fun nsfw");
-		cmds.put(".shorten", "Shortens URLS using goo.gl");
-		cmds.put(".add", "for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
-		cmds.put(".identify", "Identifies bot nick");
-		cmds.put(".brolinx", "Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
-		cmds.put(".count", "Shows the count of all the links in the 'database'");
 		cmds.put(".importnsfw", "This will import nsfw from file tits.txt");
 		cmds.put(".exportlinks", "for all(.exportlinks all <filename>) for nsfw(.exportlinks nsfw <filename>) for brolinx(.exportlinks brolinx <filename>) Exports selected cateogry links to text file.");
 	}
@@ -93,7 +86,7 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".nsfw");
-		c.setDescription("Sends a random nsfw link. FAP AWAY!");
+		c.setDescription("Sends a random fappage links. Optionally add a tag at the end to get more specific links (.nsfw <tag>)");
 		c.setUserFlags(Command.Flags.ALL);
 		c.setHidden(false);
 		c.setEnabled(true);
@@ -117,7 +110,7 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".add");
-		c.setDescription("for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
+		c.setDescription("To add a user (.add user <nick> <level>) current levels: admin,mod,user; for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
 		c.setUserFlags(Command.Flags.MOD);
 		c.setHidden(true);
 		c.setEnabled(true);
@@ -125,7 +118,15 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".brolinx");
-		c.setDescription("Gives you some sick ass bro links. You can enter a genre right after it for more specific brolinks.");
+		c.setDescription("Gives you some sick ass bro links. Optionally add a tag at the end to get more specific links (.brolinx <tag>)");
+		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".funnies");
+		c.setDescription("Gives you some funny links. Optionally add a tag at the end to get more specific links (.funnies <tag>)");
 		c.setUserFlags(Command.Flags.ALL);
 		c.setHidden(false);
 		c.setEnabled(true);
@@ -209,6 +210,9 @@ public class Bot extends PircBot {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+		} else if(f.length() <= 0) {
+			UserLevels.put(botSettings.getProperty("owner_nick").toLowerCase(), Command.Flags.ADMIN);
+			SaveList("users");
 		}
 	}
 	
@@ -291,121 +295,81 @@ public class Bot extends PircBot {
 		String[] args = cmd.split(" ");
 		for(Command c:CmdList) {
 			if(c.getCmdName().equals(args[0])) {
+				//delete this variable once all methods are switched over
 				cmd = args[0];
+				//Make sure the command is enabled before we even start
+				if(c.isEnabled() == false) {
+					sendMessage(chan,"This command is disabled.");
+					return;
+				}
+				
+				//Check to see if user has permission
+				if(hasPermission(sender,c.getUserFlags()) == false) {
+					sendMessage(chan,"You don't have the proper permissions to use this command.");
+					return;
+				}
 				
 				switch(args[0]) {
 					case ".help":
 						showHelp(args,chan);
 						break;
+						
+					case ".commands":
+						showCommands(chan);
+						break;
+						
 					case ".nsfw":
 						if(args.length > 1)
 						{
-							sendMessage(chan,getNSFW(args));
+							sendMessage(chan,getLinks(Links.SourceCategory.NSFW,args));
 							break;
 						} else {
-							sendMessage(chan,getNSFW());
+							sendMessage(chan,getLinks(Links.SourceCategory.NSFW));
 							break;
-						}			
+						}
+						
+					case ".brolinx":
+						if(args.length > 1)
+						{
+							sendMessage(chan,getLinks(Links.SourceCategory.YOUTUBE,args));
+							break;
+						} else {
+							sendMessage(chan,getLinks(Links.SourceCategory.YOUTUBE));
+							break;
+						}
+						
+					case ".funnies":
+						if(args.length > 1)
+						{
+							sendMessage(chan,getLinks(Links.SourceCategory.FUNNYS,args));
+							break;
+						} else {
+							sendMessage(chan,getLinks(Links.SourceCategory.FUNNYS));
+							break;
+						}
+						
+					case ".identify":
+						this.identify("zombies");
+						break;
+						
+					case ".count":
+						sendMessage(chan,getLinkCount());
+						break;
+						
+					case ".add":
+						if (UserLevels.get(sender.toLowerCase()) == Command.Flags.ADMIN) {
+							sendMessage(chan,addCommand(args,true));
+						} else {
+							sendMessage(chan,addCommand(args,false));
+						}
+						
+						break;
 				}
 			}
 		}
 
-		if(cmd.equals(".cmds")) {
-			
-			String msg = "";
-			for(String s : cmds.keySet()) {
-				msg += s + ", ";
-			}
-			msg = msg.substring(0, msg.length() - 1);
-			sendMessage(chan,msg);
-			
-		} else if(cmd.contains(".brolinx")) {
-			if(args.length > 1 && !args[1].isEmpty()) {
-				sendMessage(chan, getBrolinx(args[1]));
-			} else {
-				sendMessage(chan, getBrolinx());
-			}
-		} else if(cmd.contains(".shorten")) {
-			if(args[1] != "") {
-				sendMessage(chan, ShortenURL(args[1]));
-			} else { sendMessage(chan, "There is no URL to Shorten"); }
-			
-		} else if(cmd.contains(".add")) {
-			if(checkAdmin(sender)) {
-				switch(args[1]) {
-					case "tits":
-						try {
-							Links l = new Links(Links.SourceCategory.NSFW,args[2]);
-							if(DupeCheck(l.getLink())) {
-								if(args.length > 3) {
-									l.setArgs(args[3]);
-								}
-								
-								LinkList.add(l);
-							} else {
-								sendMessage(chan, "This link is already in the database. Please try a different link.");
-								return;
-							}
-							
-							
-							if(SaveList() == true) {
-								sendMessage(chan, "nsfw added!");
-							} else {
-								sendMessage(chan, "Tits Exploded! Retry perhaps?");
-							}
-							
-						} catch (Exception ex) {
-							sendMessage(chan, "There was an error reading tits");
-						}
-						break;
-					
-					case "admin":
-						try {
-							FileWriter pw = new FileWriter("admins.txt",true);
-							BufferedWriter bw = new BufferedWriter(pw);
-							bw.newLine();
-							bw.append(args[2]);
-							bw.close();
-							pw.close();
-							
-							sendMessage(chan, "admin added!");
-						} catch (Exception ex) {
-							sendMessage(chan, "There was an error reading admins");
-						}
-						break;
-						
-					case "brolinx":
-						try {
-							Links l = new Links(Links.SourceCategory.YOUTUBE,args[2]);
-							if(args[3] != null) {
-								l.setArgs(args[3]);
-							}
-							
-							LinkList.add(l);
-							if(SaveList() == true) {
-								sendMessage(chan, "Broin' Out...SUCCESSFUL!");
-							}
-							
-						} catch (Exception e) {
-							sendMessage(chan, "Fucking errors!");
-						}
-						break;
-				}
-			} else {
-				sendMessage(chan, "You cannot use this command. NOT SPECIAL ENOUGH!");
-			}
-		
-		} else if (cmd.contains(".identify")) {
-			if(checkAdmin(sender)) {
-				this.identify("zombies");
-			} else {
-				sendMessage(chan, "Fak Aff. Still not special enough!");
-			}
-			
-		} else if (cmd.contains(".count")) {
-			sendMessage(chan, "There are " + Integer.toString(getLinkCount(Links.SourceCategory.NSFW)) + " NSFW links, " + Integer.toString(getLinkCount(Links.SourceCategory.YOUTUBE)) + " Youtube links, and " + Integer.toString(getLinkCount(Links.SourceCategory.FUNNYS)) + " LOLOL links.");
-			
-		} else if(cmd.contains(".exportlinks")) {
+// -------- all that remains for the old system ---------------
+		if(cmd.contains(".exportlinks")) {
 			if(checkAdmin(sender)) {				
 				try {
 					FileWriter pw = new FileWriter(args[2] + ".txt",true);
@@ -445,7 +409,7 @@ public class Bot extends PircBot {
 				}
 			}
 		
-		}else if(cmd.contains(".importnsfw")) {
+		} else if(cmd.contains(".importnsfw")) {
 			if(checkAdmin(sender)) {
 				try{
 					FileInputStream fstream = new FileInputStream("tits.txt");
@@ -462,7 +426,7 @@ public class Bot extends PircBot {
 						} 
 					}
 					
-					if(SaveList()) {
+					if(SaveList("links")) {
 						sendMessage(chan, Integer.toString(counter) + " Links imported successfully.");
 					} else {
 						sendMessage(chan, "There was a problem saving the list.");
@@ -484,32 +448,11 @@ public class Bot extends PircBot {
 				sendMessage(chan, "Fak Aff. Still not special enough!");
 			}
 		} else {
-			sendMessage(chan, "When this doesnt send anymore i finished implementing the new commands system");
-		}			
+			// 2 commands remain to be switched over
+		}
+// ----------------------------------------------------------------
 	}
 	
-	private int getLinkCount(Links.SourceCategory cat) {
-		int i = 0;
-		
-		for(Links l : LinkList) {
-			if(l.getCat() == cat) {
-				i++;
-			}
-		}
-		
-		return i;
-	}
-	
-	private Boolean DupeCheck(String link) {
-		for(Links l : LinkList) {
-			if(l.getLink().equalsIgnoreCase(link)) {
-				return false;
-			}
-		}
-		
-		return true;
-	}
-
 // ------------------- Functions for commands ------------------------------------	
 	private void showHelp(String[] args, String channel) {
 		String msg = "Help requested! If you need help with a specific command; Try .help <command name> or .commands to see a list of available commands.";
@@ -525,14 +468,27 @@ public class Bot extends PircBot {
 		sendMessage(channel,msg);
 	}
 	
-	private String getNSFW(String[]... args) {
+	private void showCommands(String chan) {
+		String lst = "";
+		
+		for(Command c:CmdList) {
+			if(c.isHidden() == false) {
+				lst += c.getCmdName() + ", ";
+			}
+		}
+		
+		lst = lst.substring(0,lst.length() - 2);
+		sendMessage(chan,lst);
+	}
+	
+	private String getLinks(Links.SourceCategory cat,String[]... args) {
 		try {
 			List<String> temp = null;
 			
 			if(args.length > 0) {
-				temp = ReturnList(Links.SourceCategory.NSFW, args);
+				temp = ReturnList(cat, args);
 			} else {
-				temp = ReturnList(Links.SourceCategory.NSFW);
+				temp = ReturnList(cat);
 			}
 			
 			Random rand = new Random();
@@ -546,69 +502,196 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String getBrolinx(String... args) {
+	private List<String> ReturnList(Links.SourceCategory cat, String[]... args) {
+		List<String> temp = new ArrayList<String>();
+		for(Links l:LinkList) {
+			if(l.getCat() == cat) {
+				if(args.length > 0) {
+					List<String> tags = new ArrayList<String>();
+					if(l.getArgs() != null) {
+						if(l.getArgs().contains(",")) {
+							tags = new ArrayList<String>(Arrays.asList(l.getArgs().toLowerCase().split(",")));
+						} else {
+							tags.add(l.getArgs().toLowerCase());
+						}
+					
+						if(tags.contains(args[0][1].toLowerCase())) {
+							temp.add(l.getLink());
+						}
+					}
+				} else {
+					temp.add(l.getLink());
+				}
+			}
+		}
+		return temp;
+	}
+	
+	private Boolean hasPermission(String sender,Command.Flags Level) {
+		Map<Command.Flags,Integer> levels = new HashMap<Command.Flags,Integer>();
+		levels.put(Command.Flags.ADMIN, 3);
+		levels.put(Command.Flags.MOD, 2);
+		levels.put(Command.Flags.USER, 1);
+		levels.put(Command.Flags.ALL, 0);
+		
+		Integer usrlvl = 0;
+		Integer cmdlvl = levels.get(Level);
+		if(UserLevels.containsKey(sender.toLowerCase())) {
+			Command.Flags flag = UserLevels.get(sender);
+			usrlvl = levels.get(flag);
+		}
+		
+		if(usrlvl >= cmdlvl) {
+			return true;
+		}
+		
+		return false;
+	}
+	
+	private Boolean DupeCheck(String link) {
+		for(Links l : LinkList) {
+			if(l.getLink().equals(link)) {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+	
+	private Boolean SaveList(String lst) {
 		try {
-			List<String> temp;
-			if(args.length == 0) {
-				temp = ReturnList(Links.SourceCategory.YOUTUBE);
-			} else {
-				temp = ReturnList(Links.SourceCategory.YOUTUBE, args);
+			if(lst == "links") {
+				FileOutputStream fos = new FileOutputStream("links.txt");
+				ObjectOutputStream outstream = new ObjectOutputStream(fos);
+				outstream.writeObject(LinkList);
+				outstream.close();
+				fos.close();
+				return true;
+			} else if(lst == "users") {
+				FileOutputStream fos = new FileOutputStream("users.txt");
+				ObjectOutputStream outstream = new ObjectOutputStream(fos);
+				outstream.writeObject(UserLevels);
+				outstream.close();
+				fos.close();
+				return true;
+			}
+			return false;
+		} catch(FileNotFoundException e) {
+			e.printStackTrace();
+			return false;
+		} catch(IOException e) {
+			e.printStackTrace();
+			return false;
+		} catch(Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+	
+	private String addCommand(String[] args,Boolean admin) {
+		String msg = "WTF Just happened!... Ah shit there must have been an error.";
+		switch(args[1]) {
+			case "user":
+				if((Boolean.parseBoolean(botSettings.getProperty("add_user_admin_only")) == true && admin == true) || Boolean.parseBoolean(botSettings.getProperty("add_user_admin_only")) == false) {
+					if(args.length < 4) {
+						msg = "you fucked something up bro. retry using .add user <username> <level>";
+					} else {
+						msg = addUser(args);
+					}
+				} else {
+					msg = "You don't have proper permission to use this command.";
+				}
+				break;
+				
+			case "tits":
+				msg = addLinks(Links.SourceCategory.NSFW,args);
+				break;
+				
+			case "brolinx":
+				msg = addLinks(Links.SourceCategory.YOUTUBE,args);
+				break;
+				
+			case "lawlz":
+				msg = addLinks(Links.SourceCategory.FUNNYS,args);
+				break;
+		}
+		
+		return msg;
+	}
+	
+	private String addUser(String[] args) {
+		try {
+			String usrlvl = args[3];
+			
+			Command.Flags flag = null;
+			if(usrlvl.equalsIgnoreCase("admin")) {
+				flag = Command.Flags.ADMIN;
+			} else if(usrlvl.equalsIgnoreCase("mod")) {
+				flag = Command.Flags.MOD;
+			} else if(usrlvl.equalsIgnoreCase("user")) {
+				flag = Command.Flags.USER;
 			}
 			
-			Random rand = new Random();
-			return temp.get(rand.nextInt(temp.size()));
+			if(flag != null) {
+				UserLevels.put(args[2].toLowerCase(), flag);
+				if(SaveList("users")) {
+					return "User Added!";
+				} else {
+					return "There was an unexpected error.";
+				}
+			} else {
+				return "Invalid user level. use 'admin', 'mod', or 'user'";
+			}
 		} catch (Exception ex) {
 			return ex.getMessage();
 		}
 	}
 	
-	private List<String> ReturnList (Links.SourceCategory cat, String[]... args) {
-		if(cat == Links.SourceCategory.NSFW) {
-			List<String> temp = new ArrayList<String>();
-			for(Links l:LinkList) {
-				if(l.getCat() == Links.SourceCategory.NSFW) {
-					if(args.length > 0) {
-						List<String> tags = new ArrayList<String>();
-						if(l.getArgs() != null) {
-							if(l.getArgs().contains(",")) {
-								tags = new ArrayList<String>(Arrays.asList(l.getArgs().toLowerCase().split(",")));
-							} else {
-								tags.add(l.getArgs().toLowerCase());
-							}
-						
-							if(tags.contains(args[0][1].toLowerCase())) {
-								temp.add(l.getLink());
-							}
-						}
-					} else {
-						temp.add(l.getLink());
-					}
+	private String addLinks(Links.SourceCategory cat,String[] args) {
+		Links l = new Links(cat,args[2]);
+		if(args[3] != null) {
+			l.setArgs(args[3]);
+		}
+		
+		if(DupeCheck(args[2]) == false) {
+			LinkList.add(l);
+		
+			if(SaveList("links") == true) {
+				if(cat == Links.SourceCategory.NSFW) {
+					return "Future fappage added!";
+				} else if(cat == Links.SourceCategory.YOUTUBE) {
+					return "Broin' Out...SUCCESSFUL!";
+				} else {
+					return "You made some high person extremely happy!";
 				}
 			}
-			return temp;
-		} else if(cat == Links.SourceCategory.YOUTUBE) {
-			List<String> temp = new ArrayList<String>();
-			if(args.length > 0) {
-				for(Links l:LinkList) {
-					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
-						if(l.getArgs().equalsIgnoreCase(args[0].toString())) {
-							temp.add(l.getLink());
-						}
-					}
-				}
-				return temp;
+		} else {
+			return "DUPLICATE! Y U NO ADD UNIQUE LINK?";
+		}
+		
+		return "There was an unexpected error.";
+	}
+	
+	private String getLinkCount() {
+		int n = 0;
+		int y = 0;
+		int l = 0;
+		
+		for(Links lnk : LinkList) {
+			if(lnk.getCat() == Links.SourceCategory.NSFW) {
+				n++;
+			} else if(lnk.getCat() == Links.SourceCategory.YOUTUBE) {
+				y++;
 			} else {
-				for(Links l:LinkList) {
-					if(l.getCat() == Links.SourceCategory.YOUTUBE) {
-						temp.add(l.getLink());
-					}
-				}
-				return temp;
+				l++;
 			}
 		}
 		
-		return null;
+		return "There are " + Integer.toString(n) + " NSFW links, " + Integer.toString(y) + 
+				" Youtube links, and " + Integer.toString(l) + " LOLOL links.";
 	}
+	
+// ------------------------------------------------------------------------------------------------------------
 	
 	private String ShortenURL(String LongURL) {
 		/*//url aint working look into it
@@ -644,6 +727,7 @@ public class Bot extends PircBot {
 		//return shortURL;
 	}
 	
+
 	private Boolean checkAdmin(String sender) {
 		try{
 			FileInputStream fstream = new FileInputStream("admins.txt");
@@ -664,26 +748,6 @@ public class Bot extends PircBot {
 				return false;
 			}
 		} catch(Exception ex) {
-			return false;
-		}
-	}
-	
-	private Boolean SaveList() {
-		try {
-			FileOutputStream fos = new FileOutputStream("links.txt");
-			ObjectOutputStream outstream = new ObjectOutputStream(fos);
-			outstream.writeObject(LinkList);
-			outstream.close();
-			fos.close();
-			return true;
-		} catch(FileNotFoundException e) {
-			e.printStackTrace();
-			return false;
-		} catch(IOException e) {
-			e.printStackTrace();
-			return false;
-		} catch(Exception e) {
-			e.printStackTrace();
 			return false;
 		}
 	}
