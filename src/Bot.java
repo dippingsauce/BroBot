@@ -41,8 +41,6 @@ import org.jibble.pircbot.NickAlreadyInUseException;
 import org.jibble.pircbot.PircBot;
 
 public class Bot extends PircBot {
-	
-	private Map<String,String> cmds;
 	private List<Links> LinkList = new ArrayList<Links>();
 	private List<Command> CmdList = new ArrayList<Command>();
 	private Map<String,Command.Flags> UserLevels = new HashMap<String,Command.Flags>();
@@ -58,11 +56,6 @@ public class Bot extends PircBot {
 		} else {
 			this.setName("propertyError");
 		}
-		
-		// deprecated way need to get this shit out
-		cmds = new HashMap<String, String>();
-		cmds.put(".importnsfw", "This will import nsfw from file tits.txt");
-		cmds.put(".exportlinks", "for all(.exportlinks all <filename>) for nsfw(.exportlinks nsfw <filename>) for brolinx(.exportlinks brolinx <filename>) Exports selected cateogry links to text file.");
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -136,6 +129,22 @@ public class Bot extends PircBot {
 		c.setCmdName(".count");
 		c.setDescription("Shows the count of all the links in the 'database'");
 		c.setUserFlags(Command.Flags.ALL);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".import");
+		c.setDescription("For when you have a list of links and want to import them. Make sure to specify whether its brolinx, lolol, or nsfw after the command. Also make sure the format in the text file matches link then tags (i.e. .import nsfw nsfw.txt)");
+		c.setUserFlags(Command.Flags.ADMIN);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".export");
+		c.setDescription("For when you want to export a category of links. Make sure to specify whether its youtube, lolol, or nsfw after the command. (i.e. .export nsfw nsfw.txt)");
+		c.setUserFlags(Command.Flags.ADMIN);
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
@@ -295,8 +304,6 @@ public class Bot extends PircBot {
 		String[] args = cmd.split(" ");
 		for(Command c:CmdList) {
 			if(c.getCmdName().equals(args[0])) {
-				//delete this variable once all methods are switched over
-				cmd = args[0];
 				//Make sure the command is enabled before we even start
 				if(c.isEnabled() == false) {
 					sendMessage(chan,"This command is disabled.");
@@ -364,93 +371,17 @@ public class Bot extends PircBot {
 						}
 						
 						break;
+						
+					case ".import":
+						sendMessage(chan,importLinks(args));
+						break;
+						
+					case ".export":
+						sendMessage(chan,exportLinks(args));
+						break;
 				}
 			}
 		}
-
-// -------- all that remains for the old system ---------------
-		if(cmd.contains(".exportlinks")) {
-			if(checkAdmin(sender)) {				
-				try {
-					FileWriter pw = new FileWriter(args[2] + ".txt",true);
-					BufferedWriter bw = new BufferedWriter(pw);
-
-					switch(args[1]) {
-						case "nsfw":
-							for(Links l: LinkList){
-								if(l.getCat() == Links.SourceCategory.NSFW) {
-									bw.write(l.getLink());
-									bw.newLine();
-								}
-							}
-							break;
-							
-						case "brolinx":
-							for(Links l: LinkList){
-								if(l.getCat() == Links.SourceCategory.YOUTUBE) {
-									bw.write(l.getLink());
-									bw.newLine();
-								}
-							}
-							break;
-							
-						case "all":
-							for(Links l: LinkList){
-								bw.write(l.getLink());
-								bw.newLine();
-							}
-							break;
-					}
-					
-					bw.close();
-					pw.close();
-				} catch(Exception ex) {
-					sendMessage(chan, "Error somewhere along the way :(");
-				}
-			}
-		
-		} else if(cmd.contains(".importnsfw")) {
-			if(checkAdmin(sender)) {
-				try{
-					FileInputStream fstream = new FileInputStream("tits.txt");
-					DataInputStream dstream = new DataInputStream(fstream);
-					
-					BufferedReader br = new BufferedReader(new InputStreamReader(dstream));
-					String link;
-					int counter = 0;
-					while ((link = br.readLine()) != null) {
-						if(DupeCheck(link)) {
-							Links l = new Links(Links.SourceCategory.NSFW, link);
-							LinkList.add(l);
-							counter++;
-						} 
-					}
-					
-					if(SaveList("links")) {
-						sendMessage(chan, Integer.toString(counter) + " Links imported successfully.");
-					} else {
-						sendMessage(chan, "There was a problem saving the list.");
-					}
-					
-					dstream.close();
-					fstream.close();
-					
-					if(counter > 0) {
-						FileOutputStream writer = new FileOutputStream("tits.txt");
-						writer.write((new String().getBytes()));
-						writer.close();
-					}
-					
-				} catch (Exception ex) {
-					sendMessage(chan, ex.getMessage());
-				}
-			} else {
-				sendMessage(chan, "Fak Aff. Still not special enough!");
-			}
-		} else {
-			// 2 commands remain to be switched over
-		}
-// ----------------------------------------------------------------
 	}
 	
 // ------------------- Functions for commands ------------------------------------	
@@ -556,6 +487,130 @@ public class Bot extends PircBot {
 		}
 		
 		return false;
+	}
+	
+	private String importLinks(String[] args) {
+		try{
+			FileInputStream fstream = new FileInputStream(args[2]);
+			DataInputStream dstream = new DataInputStream(fstream);
+			
+			BufferedReader br = new BufferedReader(new InputStreamReader(dstream));
+			String line;
+			int counter = 0;
+
+			if(args[1].equalsIgnoreCase("nsfw")) {
+				while ((line = br.readLine()) != null) {
+					String[] attrib = line.split(" ");
+					if(DupeCheck(attrib[0])) {
+						Links l = new Links(Links.SourceCategory.NSFW, attrib[0]);
+						if(attrib[1].length() > 0) {
+							l.setArgs(attrib[1]);
+						}
+						LinkList.add(l);
+						counter++;
+					}
+				}
+			} else if(args[1].equalsIgnoreCase("brolinx")) {
+				while ((line = br.readLine()) != null) {
+					String[] attrib = line.split(" ");
+					if(DupeCheck(attrib[0])) {
+						Links l = new Links(Links.SourceCategory.YOUTUBE, attrib[0]);
+						if(attrib[1].length() > 0) {
+							l.setArgs(attrib[1]);
+						}
+						LinkList.add(l);
+						counter++;
+					}
+				}		
+			} else if(args[1].equalsIgnoreCase("lolol")) {
+				while ((line = br.readLine()) != null) {
+					String[] attrib = line.split(" ");
+					if(DupeCheck(attrib[0])) {
+						Links l = new Links(Links.SourceCategory.FUNNYS, attrib[0]);
+						if(attrib[1].length() > 0) {
+							l.setArgs(attrib[1]);
+						}
+						LinkList.add(l);
+						counter++;
+					}
+				}		
+			} else {
+				return "You didn't specify what category of links you are importing. Please try 'nsfw','brolinx',or 'lolol'";
+			}
+			
+			dstream.close();
+			fstream.close();
+								
+			if(SaveList("links")) {
+				return Integer.toString(counter) + " Links imported successfully.";
+			} else {
+				return "There was a problem saving the links to the list.";
+			}
+
+			/*if(counter > 0) {
+				FileOutputStream writer = new FileOutputStream(args[2]);
+				writer.write((new String().getBytes()));
+				writer.close();
+			}*/
+			
+		} catch (Exception ex) {
+			return ex.getMessage();
+		}
+	}
+	
+	private String exportLinks(String[] args) {
+		try {
+			Integer counter = 0;
+			FileWriter pw = new FileWriter(args[2],true);
+			BufferedWriter bw = new BufferedWriter(pw);
+
+			switch(args[1].toLowerCase()) {
+				case "nsfw":
+					for(Links l: LinkList){
+						if(l.getCat() == Links.SourceCategory.NSFW) {
+							bw.write(l.getLink() + " " + l.getArgs());
+							bw.newLine();
+							counter++;
+						}
+					}
+					break;
+					
+				case "brolinx":
+					for(Links l: LinkList){
+						if(l.getCat() == Links.SourceCategory.YOUTUBE) {
+							bw.write(l.getLink() + " " + l.getArgs());
+							bw.newLine();
+							counter++;
+						}
+					}
+					break;
+					
+				case "lolol":
+					for(Links l: LinkList){
+						if(l.getCat() == Links.SourceCategory.YOUTUBE) {
+							bw.write(l.getLink() + " " + l.getArgs());
+							bw.newLine();
+							counter++;
+						}
+					}
+					break;
+					
+				case "all":
+					for(Links l: LinkList){
+						bw.write(l.getLink() + " " + l.getArgs());
+						bw.newLine();
+						counter++;
+					}
+					break;
+			}
+			
+			bw.close();
+			pw.close();
+			
+			return "All " + counter.toString() + " messages have been exported successfully!";
+		} catch(Exception ex) {
+			return ex.getMessage();
+		}
 	}
 	
 	private Boolean SaveList(String lst) {
