@@ -16,6 +16,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
@@ -24,12 +25,14 @@ import java.nio.Buffer;
 import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
+import java.util.TimerTask;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,11 +42,14 @@ import javax.swing.text.html.HTMLEditorKit;
 import org.jibble.pircbot.IrcException;
 import org.jibble.pircbot.NickAlreadyInUseException;
 import org.jibble.pircbot.PircBot;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class Bot extends PircBot {
 	private List<Links> LinkList = new ArrayList<Links>();
 	private List<Command> CmdList = new ArrayList<Command>();
 	private Map<String,Command.Flags> UserLevels = new HashMap<String,Command.Flags>();
+	private Map<String,Integer> BadURLs = new HashMap<String,Integer>();
 	public Properties botSettings = new Properties();
 	
 	public Bot() {
@@ -56,6 +62,30 @@ public class Bot extends PircBot {
 		} else {
 			this.setName("propertyError");
 		}
+		
+		Timer t = new Timer();
+		t.scheduleAtFixedRate(new TimerTask() {
+			@Override
+			public void run() {
+				List<Links> remove = new ArrayList<Links>();
+				for(Links l: LinkList) {
+					if(l.getCat() == Links.SourceCategory.NSFW) {
+						try {
+							if(check404(l.getLink())) {
+								remove.add(l);
+							}
+						} catch (Exception e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+					}
+				}
+				
+				LinkList.removeAll(remove);
+				
+				SaveList("links");
+			}
+		}, 1000*60*2, 12*60*60*1000);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -145,6 +175,14 @@ public class Bot extends PircBot {
 		c.setCmdName(".export");
 		c.setDescription("For when you want to export a category of links. Make sure to specify whether its youtube, lolol, or nsfw after the command. (i.e. .export nsfw nsfw.txt)");
 		c.setUserFlags(Command.Flags.ADMIN);
+		c.setHidden(false);
+		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName(".imdb");
+		c.setDescription("Enter a movie title and get some info about the movie from IMDB. (i.e. .imdb Star Wars");
+		c.setUserFlags(Command.Flags.USER);
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
@@ -302,6 +340,7 @@ public class Bot extends PircBot {
 	
 	private void doCommand(String cmd, String chan, String sender) {
 		String[] args = cmd.split(" ");
+		
 		for(Command c:CmdList) {
 			if(c.getCmdName().equals(args[0])) {
 				//Make sure the command is enabled before we even start
@@ -378,6 +417,10 @@ public class Bot extends PircBot {
 						
 					case ".export":
 						sendMessage(chan,exportLinks(args));
+						break;
+						
+					case ".imdb":
+						sendMessage(chan,getIMDBdata(args));
 						break;
 				}
 			}
@@ -546,12 +589,6 @@ public class Bot extends PircBot {
 			} else {
 				return "There was a problem saving the links to the list.";
 			}
-
-			/*if(counter > 0) {
-				FileOutputStream writer = new FileOutputStream(args[2]);
-				writer.write((new String().getBytes()));
-				writer.close();
-			}*/
 			
 		} catch (Exception ex) {
 			return ex.getMessage();
@@ -708,7 +745,7 @@ public class Bot extends PircBot {
 			l.setArgs(args[3]);
 		}
 		
-		if(DupeCheck(args[2]) == false) {
+		if(DupeCheck(args[2]) == false || check404(args[2]) == false) {
 			LinkList.add(l);
 		
 			if(SaveList("links") == true) {
@@ -721,7 +758,7 @@ public class Bot extends PircBot {
 				}
 			}
 		} else {
-			return "DUPLICATE! Y U NO ADD UNIQUE LINK?";
+			return "Duplicate or dead link. Get better material!";
 		}
 		
 		return "There was an unexpected error.";
@@ -743,13 +780,101 @@ public class Bot extends PircBot {
 		}
 		
 		return "There are " + Integer.toString(n) + " NSFW links, " + Integer.toString(y) + 
-				" Youtube links, and " + Integer.toString(l) + " LOLOL links.";
+				" Brolinx links, and " + Integer.toString(l) + " LOLOL links.";
 	}
 	
-// ------------------------------------------------------------------------------------------------------------
-	
-	private String ShortenURL(String LongURL) {
-		/*//url aint working look into it
+	private Boolean check404(String strURL) {
+		HttpURLConnection conn;
+		try {
+			conn = (HttpURLConnection)new URL(strURL).openConnection();
+			if(conn.getResponseCode() == 404){
+				return true;
+			} else {
+				return false;
+			}
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch(UnknownHostException uhe) {
+			if(BadURLs.containsKey(strURL)) {
+				if(BadURLs.get(strURL) < 5) {
+					return true;
+				} else {
+					BadURLs.put(strURL, BadURLs.get(strURL) + 1);
+					return false;
+				}
+			} else {
+				BadURLs.put(strURL, 1);
+				return false;
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		return true;		
+	}
+	 
+	private String getIMDBdata(String[] args) {
+		try {
+			String apiURL = "http://www.omdbapi.com/?t=";
+			String moviename = "";
+			if(args.length > 2) {
+				for(String s:args) {
+					moviename += s + "+";
+				}
+				moviename = moviename.substring(5);
+			}else{
+				moviename = args[1];
+			}
+			
+			apiURL += moviename.trim();
+			
+			if(moviename != "") {
+				HttpURLConnection conn = (HttpURLConnection)new URL(apiURL).openConnection();
+				conn.setRequestMethod("GET");
+				
+				BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+				String inputdata;
+				StringBuffer response = new StringBuffer();
+				
+				while ((inputdata = in.readLine()) != null) {
+					response.append(inputdata);
+				}
+				
+				in.close();
+				
+				JSONObject moviedata = new JSONObject(response.toString());
+				
+				if(moviedata.has("Error")) {
+					return "\u0002Error:\u0002 " + moviedata.get("Error").toString();
+				} else {
+					String msg = "";
+					msg += "\u0002Title:\u0002 " + moviedata.get("Title") + " ";
+					msg += "\u0002Year:\u0002 " + moviedata.get("Year") + " ";
+					msg += "\u0002IMDB Rating:\u0002 " + moviedata.get("imdbRating") + " ";
+					msg += "\u0002URL:\u0002 " + "http://www.imdb.com/title/" + moviedata.get("imdbID");
+					
+					return msg;
+				}
+			} else {
+				return "Don't fuck with me...Enter a movie name";
+			}
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			return e.getMessage();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			return e.getMessage();
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			return e.getMessage();
+		}
+	}
+
+// -----------------------------------------------------------------------------------------
+	/*private String ShortenURL(String LongURL) {
+		//url aint working look into it
 		String googURL = "https://www.googleapis.com/urlshortener/v1/url?key=AIzaSyBdMcLKfQrYqL-8FCtwe0PZU9z2GGmdvPw";
 		
 		String shortURL = "";
@@ -770,41 +895,15 @@ public class Bot extends PircBot {
 			
 			osw.close();
 			rd.close();*/
-			return "SHIT FUCKIN SUCKS ITLL WORK WHEN I GET TO IT";
+			//return "SHIT FUCKIN SUCKS ITLL WORK WHEN I GET TO IT";
 		/*} catch (MalformedURLException mue) {
 			return mue.getMessage();
 		} catch (IOException ioe) {
 			return ioe.getMessage();
 		} /*catch (JSONException je) {
 			return je.getMessage();
-		}*/
+		}
 		
 		//return shortURL;
-	}
-	
-
-	private Boolean checkAdmin(String sender) {
-		try{
-			FileInputStream fstream = new FileInputStream("admins.txt");
-			DataInputStream dstream = new DataInputStream(fstream);
-			
-			BufferedReader br = new BufferedReader(new InputStreamReader(dstream));
-			List<String> temp = new ArrayList<String>();
-			String nick;
-			while ((nick = br.readLine()) != null) {
-				temp.add(nick);
-			}
-			
-			dstream.close();
-			
-			if(temp.contains(sender)) {
-				return true;
-			} else {
-				return false;
-			}
-		} catch(Exception ex) {
-			return false;
-		}
-	}
-	
+	} */
 }
