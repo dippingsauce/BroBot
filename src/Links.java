@@ -7,6 +7,7 @@ public class Links implements java.io.Serializable {
 	private String Link;
 	private String args;
 	private SourceCategory Cat;
+	private String Submitter;
 	
 	public Links(SourceCategory _cat, String _link) {
 		Cat = _cat;
@@ -32,5 +33,12 @@ public class Links implements java.io.Serializable {
 	}
 	public void setCat(SourceCategory _cat) {
 		Cat = _cat;
+	}
+	
+	public String getSubmitter() {
+		return Submitter;
+	}
+	public void setSubmitter(String name) {
+		Submitter = name;
 	}
 }

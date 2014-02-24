@@ -1,8 +1,5 @@
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.Console;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -14,18 +11,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.UnknownHostException;
-import java.nio.Buffer;
-import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +25,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
@@ -281,6 +271,45 @@ public class Bot extends PircBot {
 		
 	}
 	
+	public void onPrivateMessage(String sender, String login, String hostname, String message) {
+		
+		if(message.equalsIgnoreCase(this.botSettings.getProperty("invite_phrase"))) {
+			this.sendInvite(sender, "#"+this.botSettings.getProperty("bot_chan"));
+		} else if(sender.equalsIgnoreCase(this.botSettings.getProperty("owner_nick"))) {
+			String[] args = message.split(" ");
+			switch(args[0]) {
+				case "join":
+					this.joinChannel(args[1]);
+					break;
+				
+				case "part":
+					if(args.length > 2) {
+						this.partChannel(args[1], args[2]);
+					} else	{
+						this.partChannel(args[1]);
+					}
+					break;
+				
+				//this is for the /me command. so for this case you would pm your bot and type me does this and that
+				//and itll send botname does this and that into the chat specified in settings
+				case "me":
+					this.sendAction("#" + this.botSettings.getProperty("bot_chan"), message.substring(3));
+					break;
+					
+				case "say":
+					this.sendMessage("#" + this.botSettings.getProperty("bot_chan"), message.substring(4));
+					break;
+			}
+		}
+	}
+	
+	public void onRemoveInviteOnly(String channel, String sourceNick, String sourceLogin, String sourceHostname) {
+		if(Boolean.parseBoolean(this.botSettings.getProperty("invite_only")) && 
+				channel == "#"+this.botSettings.getProperty("bot_chan")) {
+			this.setMode(channel, "+i");
+		}
+	}
+	
 	public void onMessage(String channel, String sender, String login, 
 						String hostname, String message) {
 
@@ -291,19 +320,53 @@ public class Bot extends PircBot {
 			doCommand(message,channel,sender);
 		}
 		
+		// Testing a little bit of "AI"
+		if(message.startsWith(this.botSettings.getProperty("bot_nick").toString())) {
+			String[] args = message.split(" ");
+			if(args.length == 1) {
+				if(sender.equalsIgnoreCase(this.botSettings.getProperty("owner_nick"))) {
+					sendMessage(channel,"Sup bro, what can I do for you?");
+				} else {
+					sendMessage(channel,new AI().grabGreeting());
+				}
+			} else if(new AI().isReceiveString(Arrays.asList(Arrays.copyOfRange(args, 1, args.length - 3)))) {
+				int nickindx = new AI().getReceiveIndex(Arrays.asList(args));
+				String strnick = args[nickindx + 1];
+				if (strnick.equalsIgnoreCase("me")) {
+					strnick = "";
+				}
+				if(Arrays.asList(Arrays.copyOfRange(args, args.length - 5,args.length)).contains("nsfw")) {
+					if(new AI().isAdditionString(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)))) {
+						String[] tags = args[args.length -1].split(",");
+						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.NSFW,tags));						
+					} else {
+						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.NSFW));
+					}
+				} else if(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)).contains("funny")) {
+					if(new AI().isAdditionString(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)))) {
+						String[] tags = args[args.length -1].split(",");
+						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.FUNNYS,tags));						
+					} else {
+						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.FUNNYS));
+					}
+				} else if(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)).contains("brolinx")) {
+					if(new AI().isAdditionString(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)))) {
+						String[] tags = args[args.length -1].split(",");
+						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.YOUTUBE,tags));						
+					} else {
+						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.YOUTUBE));
+					}
+				}
+				
+			}
+		}
+		
 		
 		if(Boolean.parseBoolean(botSettings.getProperty("youtube_announce"))) {
-		/* regex alts
-		 * 
-		 * (http?s://)?(www\\.)?(youtube\\.com/|youtu\\.be/)watch\\?v=[a-zA-Z0-9-_]{11}
-		 * 
-		 * (?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)[a-zA-Z0-9-_]{11}(&(.+))?
-		 * 
-		 * https?:\\/\\/(?:[0-9A-Z-]+\\.)?(?:youtu\\.be\\/|youtube\\.com\\S*[^\\w\\-\\s])([\\w\\-]{11})(?=[^\\w\\-]|$)(?![?=&+%\\w]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w]*
-		 */
-			String pattern = "(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)[a-zA-Z0-9-_]{11}(&(.+))?";
-			Pattern compiledPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
-			if(message.trim().matches(compiledPattern.toString())) {
+			
+			//String pattern = "(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)[a-zA-Z0-9-_]{11}(&(.+))?";
+			//Pattern compiledPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+			//if(message.trim().matches(compiledPattern.toString())) {
 				try {
 					URL url = new URL(message);
 					URLConnection conn = url.openConnection();
@@ -317,8 +380,9 @@ public class Bot extends PircBot {
 					htmlkit.read(br, htmlDoc, 0);
 					
 					String title = (String) htmlDoc.getProperty(HTMLDocument.TitleProperty);
-					
-					sendMessage(channel, title);
+					if(title.contains("YouTube")) {
+						sendMessage(channel, title);
+					}
 					
 					br.close();
 					isr.close();
@@ -327,7 +391,7 @@ public class Bot extends PircBot {
 				catch (Exception ex) {
 					System.out.print(ex.getCause() + "|| " + ex.getMessage());
 				}
-			}
+			//}
 		}
 	}
 	
@@ -335,7 +399,7 @@ public class Bot extends PircBot {
 		if(Boolean.parseBoolean(botSettings.getProperty("auto_identify"))) {
 			this.identify(botSettings.getProperty("bot_password"));
 		}
-		this.joinChannel("#" + botSettings.getProperty("bot_chan"));
+			this.joinChannel("#" + botSettings.getProperty("bot_chan"));
 	}
 	
 	private void doCommand(String cmd, String chan, String sender) {
@@ -404,9 +468,9 @@ public class Bot extends PircBot {
 						
 					case ".add":
 						if (UserLevels.get(sender.toLowerCase()) == Command.Flags.ADMIN) {
-							sendMessage(chan,addCommand(args,true));
+							sendMessage(chan,addCommand(args,true,sender));
 						} else {
-							sendMessage(chan,addCommand(args,false));
+							sendMessage(chan,addCommand(args,false,sender));
 						}
 						
 						break;
@@ -680,7 +744,7 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String addCommand(String[] args,Boolean admin) {
+	private String addCommand(String[] args,Boolean admin,String sender) {
 		String msg = "WTF Just happened!... Ah shit there must have been an error.";
 		switch(args[1]) {
 			case "user":
@@ -696,15 +760,15 @@ public class Bot extends PircBot {
 				break;
 				
 			case "tits":
-				msg = addLinks(Links.SourceCategory.NSFW,args);
+				msg = addLinks(Links.SourceCategory.NSFW,args,sender);
 				break;
 				
 			case "brolinx":
-				msg = addLinks(Links.SourceCategory.YOUTUBE,args);
+				msg = addLinks(Links.SourceCategory.YOUTUBE,args,sender);
 				break;
 				
 			case "lawlz":
-				msg = addLinks(Links.SourceCategory.FUNNYS,args);
+				msg = addLinks(Links.SourceCategory.FUNNYS,args,sender);
 				break;
 		}
 		
@@ -739,9 +803,10 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String addLinks(Links.SourceCategory cat,String[] args) {
+	private String addLinks(Links.SourceCategory cat,String[] args,String sender) {
 		Links l = new Links(cat,args[2]);
-		if(args[3] != null) {
+		l.setSubmitter(sender);
+		if(args.length > 3) {
 			l.setArgs(args[3]);
 		}
 		

@@ -1,8 +1,7 @@
-import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 
-import org.jibble.pircbot.*;
+import org.jibble.pircbot.NickAlreadyInUseException;
 
 public class botMain {
 	
@@ -27,6 +26,9 @@ public class botMain {
 			
 			brobot.connect(brobot.botSettings.getProperty("irc_server"),Integer.parseInt(brobot.botSettings.getProperty("server_port")));
 			
+		} catch(NickAlreadyInUseException naiue) {
+			brobot.changeNick("somebodystolemynick");
+			brobot.sendRawLine("/msg nickserv ghost " + brobot.botSettings.getProperty("bot_password"));
 		}
 	}
 	
