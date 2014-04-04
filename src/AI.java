@@ -16,12 +16,13 @@ final class AI {
 		ReceiveStrings.add("fetch");
 		ReceiveStrings.add("hook");
 		ReceiveStrings.add("send");
+		ReceiveStrings.add("give");
 		
 		ResponseStrings.add("here you go");
 		ResponseStrings.add("check this out");
 		ResponseStrings.add("enjoy");
-		ResponseStrings.add("peep this shit!");
-		ResponseStrings.add("hopefully this is good enough.");
+		ResponseStrings.add("peep this shit");
+		ResponseStrings.add("hopefully this is good enough");
 		
 		GreetingStrings.add("What's up?");
 		GreetingStrings.add("Sup?");
@@ -32,6 +33,7 @@ final class AI {
 		AdditionalStrings.add("with");
 		AdditionalStrings.add("containing");
 		AdditionalStrings.add("consisting");
+		AdditionalStrings.add("has");
 	}
 	
 	public String grabResponse() {
@@ -64,11 +66,15 @@ final class AI {
 
 	public Boolean isAdditionString(List<String> strTest) {
 		Boolean bTest = false;
+		if(strTest.isEmpty()) {
+			return bTest;
+		}
 		for(String s: AdditionalStrings) {
 			if(strTest.contains(s)) {
 				bTest = true;
 			}
 		}
+
 		return bTest;
 	}
 }

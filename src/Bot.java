@@ -32,6 +32,7 @@ import javax.swing.text.html.HTMLEditorKit;
 import org.jibble.pircbot.IrcException;
 import org.jibble.pircbot.NickAlreadyInUseException;
 import org.jibble.pircbot.PircBot;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -171,7 +172,7 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".imdb");
-		c.setDescription("Enter a movie title and get some info about the movie from IMDB. (i.e. .imdb Star Wars");
+		c.setDescription("Enter a movie title and get some info about the movie from IMDB. (i.e. .imdb Star Wars). optionally use the -y flag for the year (i.e. .imdb star wars -y 1977");
 		c.setUserFlags(Command.Flags.USER);
 		c.setHidden(false);
 		c.setEnabled(true);
@@ -289,6 +290,14 @@ public class Bot extends PircBot {
 						this.partChannel(args[1]);
 					}
 					break;
+					
+				case "add":
+					sendMessage(sender,addCommand(args,true,sender));
+					break;
+					
+				case "info":
+					sendMessage(sender, getInfo(args[1]));
+					break;
 				
 				//this is for the /me command. so for this case you would pm your bot and type me does this and that
 				//and itll send botname does this and that into the chat specified in settings
@@ -322,39 +331,40 @@ public class Bot extends PircBot {
 		
 		// Testing a little bit of "AI"
 		if(message.startsWith(this.botSettings.getProperty("bot_nick").toString())) {
+			AI chica = new AI();
 			String[] args = message.split(" ");
 			if(args.length == 1) {
 				if(sender.equalsIgnoreCase(this.botSettings.getProperty("owner_nick"))) {
 					sendMessage(channel,"Sup bro, what can I do for you?");
 				} else {
-					sendMessage(channel,new AI().grabGreeting());
+					sendMessage(channel,chica.grabGreeting());
 				}
-			} else if(new AI().isReceiveString(Arrays.asList(Arrays.copyOfRange(args, 1, args.length - 3)))) {
-				int nickindx = new AI().getReceiveIndex(Arrays.asList(args));
+			} else if(chica.isReceiveString(Arrays.asList(Arrays.copyOfRange(args, 1, args.length / 2)))) {
+				int nickindx = chica.getReceiveIndex(Arrays.asList(args));
 				String strnick = args[nickindx + 1];
 				if (strnick.equalsIgnoreCase("me")) {
 					strnick = "";
 				}
-				if(Arrays.asList(Arrays.copyOfRange(args, args.length - 5,args.length)).contains("nsfw")) {
-					if(new AI().isAdditionString(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)))) {
+				if(Arrays.asList(Arrays.copyOfRange(args, args.length / 2,args.length)).contains("nsfw")) {
+					if(chica.isAdditionString(Arrays.asList(Arrays.copyOfRange(args, Arrays.asList(args).indexOf("nsfw"), args.length)))) {
 						String[] tags = args[args.length -1].split(",");
-						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.NSFW,tags));						
+						sendMessage(channel,strnick+ " " + chica.grabResponse() + ". " + getLinks(Links.SourceCategory.NSFW,tags));						
 					} else {
-						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.NSFW));
+						sendMessage(channel,strnick+ " " + chica.grabResponse() + ". " + getLinks(Links.SourceCategory.NSFW));
 					}
-				} else if(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)).contains("funny")) {
-					if(new AI().isAdditionString(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)))) {
+				} else if(Arrays.asList(Arrays.copyOfRange(args, args.length / 2,args.length)).contains("funny")) {
+					if(chica.isAdditionString(Arrays.asList(Arrays.copyOfRange(args, Arrays.asList(args).indexOf("funny"), args.length)))) {
 						String[] tags = args[args.length -1].split(",");
-						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.FUNNYS,tags));						
+						sendMessage(channel,strnick+ " " + chica.grabResponse() + ". " + getLinks(Links.SourceCategory.FUNNYS,tags));						
 					} else {
-						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.FUNNYS));
+						sendMessage(channel,strnick+ " " + chica.grabResponse() + ". " + getLinks(Links.SourceCategory.FUNNYS));
 					}
-				} else if(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)).contains("brolinx")) {
-					if(new AI().isAdditionString(Arrays.asList(Arrays.copyOfRange(args, args.length - 3,args.length)))) {
+				} else if(Arrays.asList(Arrays.copyOfRange(args, args.length / 2,args.length)).contains("brolinx")) {
+					if(chica.isAdditionString(Arrays.asList(Arrays.copyOfRange(args, Arrays.asList(args).indexOf("brolinx"), args.length)))) {
 						String[] tags = args[args.length -1].split(",");
-						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.YOUTUBE,tags));						
+						sendMessage(channel,strnick+ " " + chica.grabResponse() + ". " + getLinks(Links.SourceCategory.YOUTUBE,tags));						
 					} else {
-						sendMessage(channel,strnick+ " " + new AI().grabResponse() + ". " + getLinks(Links.SourceCategory.YOUTUBE));
+						sendMessage(channel,strnick+ " " + chica.grabResponse() + ". " + getLinks(Links.SourceCategory.YOUTUBE));
 					}
 				}
 				
@@ -421,11 +431,11 @@ public class Bot extends PircBot {
 				
 				switch(args[0]) {
 					case ".help":
-						showHelp(args,chan);
+						showHelp(args,sender);
 						break;
 						
 					case ".commands":
-						showCommands(chan);
+						showCommands(sender);
 						break;
 						
 					case ".nsfw":
@@ -492,7 +502,7 @@ public class Bot extends PircBot {
 	}
 	
 // ------------------- Functions for commands ------------------------------------	
-	private void showHelp(String[] args, String channel) {
+	private void showHelp(String[] args, String sender) {
 		String msg = "Help requested! If you need help with a specific command; Try .help <command name> or .commands to see a list of available commands.";
 		
 		if(args.length > 1) {
@@ -503,10 +513,10 @@ public class Bot extends PircBot {
 			}
 		}
 		
-		sendMessage(channel,msg);
+		sendNotice(sender,msg);
 	}
 	
-	private void showCommands(String chan) {
+	private void showCommands(String sender) {
 		String lst = "";
 		
 		for(Command c:CmdList) {
@@ -516,12 +526,12 @@ public class Bot extends PircBot {
 		}
 		
 		lst = lst.substring(0,lst.length() - 2);
-		sendMessage(chan,lst);
+		sendNotice(sender,lst);
 	}
 	
 	private String getLinks(Links.SourceCategory cat,String[]... args) {
 		try {
-			List<String> temp = null;
+			List<Links> temp = null;
 			
 			if(args.length > 0) {
 				temp = ReturnList(cat, args);
@@ -531,7 +541,7 @@ public class Bot extends PircBot {
 			
 			Random rand = new Random();
 			if(!temp.isEmpty()) {
-				return temp.get(rand.nextInt(temp.size()));
+				return temp.get(rand.nextInt(temp.size())).getLink();
 			}
 			
 			return "Unfortunately, I couldn't locate any links that were up your alley.";
@@ -540,8 +550,18 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private List<String> ReturnList(Links.SourceCategory cat, String[]... args) {
-		List<String> temp = new ArrayList<String>();
+	private String getInfo(String link) {
+		for(Links l:LinkList) {
+			if(link.equals(l.getLink())) {
+				return "\u0002ID:\u0002 " + LinkList.indexOf(l) + " \u0002Submitted By:\u0002 " + l.getSubmitter() + " \u0002Tags:\u0002 " + l.getArgs();
+			}
+		}
+		
+		return "Couldn't locate link in the database.";
+	}
+	
+	private List<Links> ReturnList(Links.SourceCategory cat, String[]... args) {
+		List<Links> temp = new ArrayList<Links>();
 		for(Links l:LinkList) {
 			if(l.getCat() == cat) {
 				if(args.length > 0) {
@@ -552,13 +572,20 @@ public class Bot extends PircBot {
 						} else {
 							tags.add(l.getArgs().toLowerCase());
 						}
-					
-						if(tags.contains(args[0][1].toLowerCase())) {
-							temp.add(l.getLink());
+						
+						
+						if(args[0].length == 1) {
+							if(tags.contains(args[0][0].toLowerCase())) {
+								temp.add(l);
+							} 
+						} else {
+							if(tags.contains(args[0][1].toLowerCase())) {
+								temp.add(l);
+							}
 						}
 					}
 				} else {
-					temp.add(l.getLink());
+					temp.add(l);
 				}
 			}
 		}
@@ -759,6 +786,7 @@ public class Bot extends PircBot {
 				}
 				break;
 				
+			case "nsfw":
 			case "tits":
 				msg = addLinks(Links.SourceCategory.NSFW,args,sender);
 				break;
@@ -767,6 +795,8 @@ public class Bot extends PircBot {
 				msg = addLinks(Links.SourceCategory.YOUTUBE,args,sender);
 				break;
 				
+			case "lulz":
+			case "lolol":
 			case "lawlz":
 				msg = addLinks(Links.SourceCategory.FUNNYS,args,sender);
 				break;
@@ -882,18 +912,39 @@ public class Bot extends PircBot {
 	 
 	private String getIMDBdata(String[] args) {
 		try {
-			String apiURL = "http://www.omdbapi.com/?t=";
+			String apiURL = "http://www.omdbapi.com/?s=";
 			String moviename = "";
-			if(args.length > 2) {
-				for(String s:args) {
-					moviename += s + "+";
+			Boolean hasYear = false;
+			String year = "";
+			
+			for(int i = 1; i < args.length; i++) {
+				if(args[i].startsWith("-")) {
+					if(args[i].toLowerCase().endsWith("y")) {
+						hasYear = true;
+						year = args[i+1];
+						args = Arrays.copyOfRange(args,0, i);
+					}
 				}
-				moviename = moviename.substring(5);
+			}
+			
+			if(args.length > 2) {
+				for(int i = 1; i < args.length; i++) {
+					if(i < args.length - 1) {
+						moviename = args[i] + "%20";
+					} else {
+						moviename += args[i];
+					}
+				}
 			}else{
 				moviename = args[1];
 			}
+			moviename = moviename.trim();
 			
-			apiURL += moviename.trim();
+			if(hasYear == false) {
+				apiURL += moviename + "&r=JSON";
+			} else {
+				apiURL += moviename + "&r=JSON&y=" + year;
+			}
 			
 			if(moviename != "") {
 				HttpURLConnection conn = (HttpURLConnection)new URL(apiURL).openConnection();
@@ -909,19 +960,51 @@ public class Bot extends PircBot {
 				
 				in.close();
 				
+				JSONObject data = new JSONObject(response.toString());
+				if(data.has("Error")) {
+					return "\u0002Error:\u0002 " + data.get("Error").toString();
+				} 
+				
+				JSONArray datalist = data.getJSONArray("Search");
+
+				JSONObject movie = new JSONObject();
+				for(int i = 0; i < datalist.length();i++) {
+					if(!datalist.getJSONObject(i).getString("Type").contains("episode")) {
+						movie = datalist.getJSONObject(i);
+						break;
+					}	
+				}
+				
+				if(movie.has("Error")) {
+					return "\u0002Error:\u0002 " + movie.get("Error").toString();
+				}
+				
+				apiURL = "http://www.omdbapi.com/?i=" + movie.get("imdbID").toString();
+				conn = (HttpURLConnection) new URL(apiURL).openConnection();
+				conn.setRequestMethod("GET");
+					
+				in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+				response = new StringBuffer();
+					
+				while ((inputdata = in.readLine()) != null) {
+					response.append(inputdata);
+				}
+				in.close();
+					
 				JSONObject moviedata = new JSONObject(response.toString());
 				
 				if(moviedata.has("Error")) {
 					return "\u0002Error:\u0002 " + moviedata.get("Error").toString();
-				} else {
-					String msg = "";
-					msg += "\u0002Title:\u0002 " + moviedata.get("Title") + " ";
-					msg += "\u0002Year:\u0002 " + moviedata.get("Year") + " ";
-					msg += "\u0002IMDB Rating:\u0002 " + moviedata.get("imdbRating") + " ";
-					msg += "\u0002URL:\u0002 " + "http://www.imdb.com/title/" + moviedata.get("imdbID");
-					
-					return msg;
 				}
+					
+				String msg = "";
+				msg += "\u0002Title:\u0002 " + moviedata.get("Title") + " ";
+				msg += "\u0002Year:\u0002 " + moviedata.get("Year") + " ";
+				msg += "\u0002IMDB Rating:\u0002 " + moviedata.get("imdbRating") + " ";
+				msg += "\u0002URL:\u0002 " + "http://www.imdb.com/title/" + moviedata.get("imdbID");
+					
+				return msg;
+				
 			} else {
 				return "Don't fuck with me...Enter a movie name";
 			}

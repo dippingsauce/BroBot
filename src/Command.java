@@ -1,6 +1,7 @@
 public class Command {
 		
 		public enum Flags { ALL, ADMIN, USER, MOD }
+		@SuppressWarnings("unused")
 		private static final long serialVersionUID = 1L;
 		private String Name;
 		private String Description;
@@ -54,5 +55,6 @@ public class Command {
 		public void setEnabled(Boolean _enabled) {
 			Enabled = _enabled;
 		}
+	
  }
 
