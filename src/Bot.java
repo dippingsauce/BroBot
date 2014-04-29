@@ -29,6 +29,7 @@ import java.util.TimerTask;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 
+import org.jibble.pircbot.Colors;
 import org.jibble.pircbot.IrcException;
 import org.jibble.pircbot.NickAlreadyInUseException;
 import org.jibble.pircbot.PircBot;
@@ -42,6 +43,7 @@ public class Bot extends PircBot {
 	private Map<String,Command.Flags> UserLevels = new HashMap<String,Command.Flags>();
 	private Map<String,Integer> BadURLs = new HashMap<String,Integer>();
 	public Properties botSettings = new Properties();
+	private int TorrentID = -1;
 	
 	public Bot() {
 		initData();
@@ -54,6 +56,7 @@ public class Bot extends PircBot {
 			this.setName("propertyError");
 		}
 		
+		//auto delete 404'd images
 		Timer t = new Timer();
 		t.scheduleAtFixedRate(new TimerTask() {
 			@Override
@@ -77,6 +80,21 @@ public class Bot extends PircBot {
 				SaveList("links");
 			}
 		}, 1000*60*2, 12*60*60*1000);
+		
+		//torrent announce 1000*60 is 1 min (1000 is 1 second so if you want to change the time keep that in mind)
+		if(Boolean.parseBoolean(botSettings.getProperty("torrent_announce").toString())) {
+			Timer t2 = new Timer();
+			t2.scheduleAtFixedRate(new TimerTask() {
+				@Override
+				public void run() {
+					String msg = "";
+					if((msg = checkAnnounce(TorrentID)) != "Error") {
+						sendMessage("#"+botSettings.getProperty("bot_chan"),msg);
+					}
+				}
+	
+			}, 1000*60,1000*60);
+		}
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -276,7 +294,7 @@ public class Bot extends PircBot {
 		
 		if(message.equalsIgnoreCase(this.botSettings.getProperty("invite_phrase"))) {
 			this.sendInvite(sender, "#"+this.botSettings.getProperty("bot_chan"));
-		} else if(sender.equalsIgnoreCase(this.botSettings.getProperty("owner_nick"))) {
+		} else if(UserLevels.containsKey(sender.toLowerCase())) {
 			String[] args = message.split(" ");
 			switch(args[0]) {
 				case "join":
@@ -292,7 +310,11 @@ public class Bot extends PircBot {
 					break;
 					
 				case "add":
-					sendMessage(sender,addCommand(args,true,sender));
+					if (UserLevels.get(sender.toLowerCase()) == Command.Flags.ADMIN) {
+						sendMessage(sender,addCommand(args,true,sender));
+					} else {
+						sendMessage(sender,"You do not have proper permissions");
+					}
 					break;
 					
 				case "info":
@@ -602,7 +624,7 @@ public class Bot extends PircBot {
 		Integer usrlvl = 0;
 		Integer cmdlvl = levels.get(Level);
 		if(UserLevels.containsKey(sender.toLowerCase())) {
-			Command.Flags flag = UserLevels.get(sender);
+			Command.Flags flag = UserLevels.get(sender.toLowerCase());
 			usrlvl = levels.get(flag);
 		}
 		
@@ -875,14 +897,17 @@ public class Bot extends PircBot {
 		}
 		
 		return "There are " + Integer.toString(n) + " NSFW links, " + Integer.toString(y) + 
-				" Brolinx links, and " + Integer.toString(l) + " LOLOL links.";
+				" Brolinx links, and " + Integer.toString(l) + " Funnies links.";
 	}
 	
 	private Boolean check404(String strURL) {
 		HttpURLConnection conn;
+		HttpURLConnection.setFollowRedirects(false);
 		try {
 			conn = (HttpURLConnection)new URL(strURL).openConnection();
 			if(conn.getResponseCode() == 404){
+				return true;
+			} else if(strURL.contains("imgur") && conn.getResponseCode() == 302){
 				return true;
 			} else {
 				return false;
@@ -1017,6 +1042,58 @@ public class Bot extends PircBot {
 		} catch (JSONException e) {
 			// TODO Auto-generated catch block
 			return e.getMessage();
+		}
+	}
+	
+	private String checkAnnounce(int torrentID) {
+		try{
+			String TorURL = this.botSettings.getProperty("announce_url").toString() + torrentID;
+			HttpURLConnection conn = (HttpURLConnection)new URL(TorURL).openConnection();
+			conn.setRequestMethod("GET");
+			
+			BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+			String inputdata;
+			StringBuffer response = new StringBuffer();
+			
+			while ((inputdata = in.readLine()) != null) {
+				response.append(inputdata);
+			}
+			
+			in.close();
+			
+			
+			JSONArray data = new JSONArray(response.toString());
+			
+			String msg = "";
+			msg += Colors.PURPLE + Colors.UNDERLINE + "Title:" + Colors.NORMAL + " " + data.getJSONObject(0).get("torrent") + " ";
+			msg += Colors.PURPLE + Colors.UNDERLINE + "URL:" + Colors.NORMAL + " " + botSettings.getProperty("torrent_url_prefix").toString() + data.getJSONObject(0).get("uri") + " ";
+			
+			String[] tags = data.getJSONObject(0).get("tags").toString().split(" ");
+			String strtags = "";
+			for(int i = 0; i < tags.length; i++)
+			{
+				if(i < 5) {
+					strtags += tags[i] + " ";
+				}
+			}
+			msg += Colors.PURPLE + Colors.UNDERLINE + "Tags:" + Colors.NORMAL + " " + strtags;
+			
+			if(torrentID != Integer.parseInt(data.getJSONObject(0).get("id").toString())) {
+				TorrentID = Integer.parseInt(data.getJSONObject(0).get("id").toString()); 
+			
+				return msg;
+			} else {
+				return "";
+			}
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			return "Error";
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			return "Error";
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			return "Error";
 		}
 	}
 
