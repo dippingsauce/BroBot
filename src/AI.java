@@ -17,6 +17,7 @@ final class AI {
 		ReceiveStrings.add("hook");
 		ReceiveStrings.add("send");
 		ReceiveStrings.add("give");
+		ReceiveStrings.add("find");
 		
 		ResponseStrings.add("here you go");
 		ResponseStrings.add("check this out");
