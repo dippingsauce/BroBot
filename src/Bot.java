@@ -42,6 +42,7 @@ public class Bot extends PircBot {
 	private List<Command> CmdList = new ArrayList<Command>();
 	private Map<String,Command.Flags> UserLevels = new HashMap<String,Command.Flags>();
 	private Map<String,Integer> BadURLs = new HashMap<String,Integer>();
+	private List<String[]> TagAliases = new ArrayList<String[]>();
 	public Properties botSettings = new Properties();
 	private int TorrentID = -1;
 	
@@ -99,6 +100,13 @@ public class Bot extends PircBot {
 	
 	@SuppressWarnings("unchecked")
 	private void initData() {
+		// add the TagAliases for better tag checking and less tagging		
+		TagAliases.add(new String[] {"tits","boobs","boobies","tittes"});
+		TagAliases.add(new String[] {"vagina","vag","pussy","twat"});
+		TagAliases.add(new String[] {"big.boobs","big.tits","big.titties","big.boobies"});
+		TagAliases.add(new String[] {"asshole","butthole","brown.star","brownstar"});
+		TagAliases.add(new String[] {"small.boobs","small.tits","small.titties","small.boobies"});
+		
 		// add all our commands to the CmdList (still need to think of the right place to put this)
 		Command c = new Command();
 		c.setCmdName(".help");
@@ -118,7 +126,7 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".nsfw");
-		c.setDescription("Sends a random fappage links. Optionally add a tag at the end to get more specific links (.nsfw <tag>)");
+		c.setDescription("Sends a random fappage links. Optionally add a tag at the end to get more specific links (.nsfw <tag>) furthermore you can use ! to exclude the tag (.nsfw !<tag>)");
 		c.setUserFlags(Command.Flags.ALL);
 		c.setHidden(false);
 		c.setEnabled(true);
@@ -142,7 +150,7 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".add");
-		c.setDescription("To add a user (.add user <nick> <level>) current levels: admin,mod,user; for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated");
+		c.setDescription("To add a user (.add user <nick> <level>) current levels: admin,mod,user; for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated.");
 		c.setUserFlags(Command.Flags.MOD);
 		c.setHidden(true);
 		c.setEnabled(true);
@@ -150,7 +158,7 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".brolinx");
-		c.setDescription("Gives you some sick ass bro links. Optionally add a tag at the end to get more specific links (.brolinx <tag>)");
+		c.setDescription("Gives you some sick ass bro links. Optionally add a tag at the end to get more specific links (.brolinx <tag>) furthermore you can use ! to exclude the tag (.brolinx !<tag>)");
 		c.setUserFlags(Command.Flags.ALL);
 		c.setHidden(false);
 		c.setEnabled(true);
@@ -158,7 +166,7 @@ public class Bot extends PircBot {
 		
 		c = new Command();
 		c.setCmdName(".funnies");
-		c.setDescription("Gives you some funny links. Optionally add a tag at the end to get more specific links (.funnies <tag>)");
+		c.setDescription("Gives you some funny links. Optionally add a tag at the end to get more specific links (.funnies <tag>) furthermore you can use ! to exclude the tag (.funnies !<tag>)");
 		c.setUserFlags(Command.Flags.ALL);
 		c.setHidden(false);
 		c.setEnabled(true);
@@ -320,6 +328,14 @@ public class Bot extends PircBot {
 				case "info":
 					sendMessage(sender, getInfo(args[1]));
 					break;
+					
+				case "edit":
+					sendMessage(sender, editLink(args));
+					break;
+					
+				case "editconfig":
+					sendMessage(sender, editConfig(args));
+					break;
 				
 				//this is for the /me command. so for this case you would pm your bot and type me does this and that
 				//and itll send botname does this and that into the chat specified in settings
@@ -330,6 +346,7 @@ public class Bot extends PircBot {
 				case "say":
 					this.sendMessage("#" + this.botSettings.getProperty("bot_chan"), message.substring(4));
 					break;
+					
 			}
 		}
 	}
@@ -528,11 +545,30 @@ public class Bot extends PircBot {
 		String msg = "Help requested! If you need help with a specific command; Try .help <command name> or .commands to see a list of available commands.";
 		
 		if(args.length > 1) {
+			if(UserLevels.get(sender.toLowerCase()) == Command.Flags.ADMIN) {
+				if(args[1].equals("configs")) {
+					Object[] keys = botSettings.keySet().toArray();
+					for(int i=0;i<keys.length;i++) {
+						if(i == 0) {
+							msg = keys[i].toString() + ", ";
+						} else if(i == keys.length - 1) {
+							msg += keys[i].toString();
+						} else {
+							msg += keys[i].toString() + ", ";
+						}
+						
+						
+					}
+				}
+			}
+			
 			for(Command c:CmdList) {
 				if(c.getCmdName().endsWith(args[1])) {
 					msg = c.getDescription();
 				}
 			}
+			
+			
 		}
 		
 		sendNotice(sender,msg);
@@ -582,6 +618,60 @@ public class Bot extends PircBot {
 		return "Couldn't locate link in the database.";
 	}
 	
+	private String editConfig(String[] args) {
+		if(botSettings.containsKey(args[1])) {
+			return args[1] + " changed from " + botSettings.setProperty(args[1], args[2]).toString() + " to " + args[2];
+			
+		} else {
+			return "Invalid Setting, please try again";
+		}
+	}
+	
+	private String editLink(String[] args) {
+		//edit <link> <what you are editing> <how you are editing it> <the edit> so for now edit link <tags> <add|change> newinfo or edit link <category> <funnies|nsfw|brolinx>
+		boolean edited = false;
+		if(!args[1].isEmpty()) {
+			for(Links l:LinkList) {
+				if(args[1].equals(l.getLink())) {
+					switch(args[2].toString()) {
+						case "tags":
+							if(args[3].equals("add")) {
+								l.setArgs(l.getArgs() + "," + args[4].toString());
+								edited = true;
+							} else if(args[3].equals("change")) {
+								l.setArgs(args[4].toString());
+								edited = true;
+							}
+							break;
+							
+						case "category":
+							
+							if(args[3].toString() != l.returnCatString()) {
+								if(args[3].equals("funnies")) {
+									l.setCat(Links.SourceCategory.FUNNYS);
+									edited = true;
+								} else if(args[3].equals("nsfw")) {
+									l.setCat(Links.SourceCategory.NSFW);
+									edited = true;
+								} else if(args[3].equals("brolinx")) {
+									l.setCat(Links.SourceCategory.YOUTUBE);
+									edited = true;
+								}
+							}
+							break;
+					}
+				}
+			}
+		}
+		
+		if(edited == false) {
+			return "Couldn't find link or rare case that it didnt edit correctly";
+		} else {
+			SaveList("links");
+			return "All is well.";
+		}
+	}
+	
 	private List<Links> ReturnList(Links.SourceCategory cat, String[]... args) {
 		List<Links> temp = new ArrayList<Links>();
 		for(Links l:LinkList) {
@@ -597,12 +687,28 @@ public class Bot extends PircBot {
 						
 						
 						if(args[0].length == 1) {
-							if(tags.contains(args[0][0].toLowerCase())) {
-								temp.add(l);
-							} 
+							//if tag contains an exclude character ! grab all tags that dont contain the tag
+							if(args[0][0].contains("!")) {
+								if(!l.CheckTag(getTagsFromAlias(args[0][0].replace("!", "").toLowerCase()))) {
+									temp.add(l);
+								}
+							//if it doesn't contain an exclude character then grab all links that contain the tag
+							} else {
+								if(l.CheckTag(getTagsFromAlias(args[0][0].toLowerCase()))) {
+									temp.add(l);
+								}
+							}
 						} else {
-							if(tags.contains(args[0][1].toLowerCase())) {
-								temp.add(l);
+							//if tag contains an exclude character ! grab all tags that dont contain the tag
+							if(args[0][1].contains("!")) {
+								if(!l.CheckTag(getTagsFromAlias(args[0][1].replace("!", "").toLowerCase()))) {
+									temp.add(l);
+								}
+							//if it doesn't contain an exclude character then grab all links that contain the tag
+							} else {
+								if(l.CheckTag(getTagsFromAlias(args[0][1].toLowerCase()))) {
+									temp.add(l);
+								}
 							}
 						}
 					}
@@ -1095,6 +1201,18 @@ public class Bot extends PircBot {
 			// TODO Auto-generated catch block
 			return "Error";
 		}
+	}
+	
+	private String[] getTagsFromAlias(String tag) {
+		for(int i=0;i<TagAliases.size();i++) {
+			for(int j=0;j<TagAliases.get(i).length;j++) {
+				if(TagAliases.get(i)[j].equalsIgnoreCase(tag)) {
+					return TagAliases.get(i);
+				}
+			}
+		}
+		
+		return new String[] { tag };
 	}
 
 // -----------------------------------------------------------------------------------------
