@@ -763,11 +763,11 @@ public class Bot extends PircBot {
 			if(args[1].equalsIgnoreCase("nsfw")) {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
-					if(DupeCheck(attrib[0])) {
+					if(!DupeCheck(attrib[0])) {
 						Links l = new Links(Links.SourceCategory.NSFW, attrib[0]);
 						if(!check404(attrib[0])) {
 							
-							if(attrib[1] != null) {
+							if(attrib.length > 1) {
 								if(attrib[1].length() > 0) {
 									l.setArgs(attrib[1]);
 								}
@@ -780,11 +780,11 @@ public class Bot extends PircBot {
 			} else if(args[1].equalsIgnoreCase("brolinx")) {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
-					if(DupeCheck(attrib[0])) {
+					if(!DupeCheck(attrib[0])) {
 						Links l = new Links(Links.SourceCategory.YOUTUBE, attrib[0]);
 						if(!check404(attrib[0])) {
 							
-							if(attrib[1] != null) {
+							if(attrib.length > 1) {
 								if(attrib[1].length() > 0) {
 									l.setArgs(attrib[1]);
 								}
@@ -797,12 +797,12 @@ public class Bot extends PircBot {
 			} else if(args[1].equalsIgnoreCase("lolol")) {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
-					if(DupeCheck(attrib[0])) {
+					if(!DupeCheck(attrib[0])) {
 						Links l = new Links(Links.SourceCategory.FUNNYS, attrib[0]);
 
 						if(!check404(attrib[0])) {
 							
-							if(attrib[1] != null) {
+							if(attrib.length > 1) {
 								if(attrib[1].length() > 0) {
 									l.setArgs(attrib[1]);
 								}
