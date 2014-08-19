@@ -764,54 +764,60 @@ public class Bot extends PircBot {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
 					if(DupeCheck(attrib[0])) {
-						if(check404(attrib[0])) {
-							Links l = new Links(Links.SourceCategory.NSFW, attrib[0]);
-						}
-						if(attrib[1] != null) {
-							if(attrib[1].length() > 0) {
-								l.setArgs(attrib[1]);
+						Links l = new Links(Links.SourceCategory.NSFW, attrib[0]);
+						if(!check404(attrib[0])) {
+							
+							if(attrib[1] != null) {
+								if(attrib[1].length() > 0) {
+									l.setArgs(attrib[1]);
+								}
 							}
+							LinkList.add(l);
+							counter++;
 						}
-						LinkList.add(l);
-						counter++;
 					}
 				}
 			} else if(args[1].equalsIgnoreCase("brolinx")) {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
 					if(DupeCheck(attrib[0])) {
-						if(check404(attrib[0])) {
-							Links l = new Links(Links.SourceCategory.YOUTUBE, attrib[0]);
-						}
-						if(attrib[1] != null) {
-							if(attrib[1].length() > 0) {
-								l.setArgs(attrib[1]);
+						Links l = new Links(Links.SourceCategory.YOUTUBE, attrib[0]);
+						if(!check404(attrib[0])) {
+							
+							if(attrib[1] != null) {
+								if(attrib[1].length() > 0) {
+									l.setArgs(attrib[1]);
+								}
 							}
+							LinkList.add(l);
+							counter++;
 						}
-						LinkList.add(l);
-						counter++;
 					}
 				}		
 			} else if(args[1].equalsIgnoreCase("lolol")) {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
 					if(DupeCheck(attrib[0])) {
-						if(check404(attrib[0])) {
-							Links l = new Links(Links.SourceCategory.FUNNYS, attrib[0]);
-						}
-						if(attrib[1] != null) {
-							if(attrib[1].length() > 0) {
-								l.setArgs(attrib[1]);
+						Links l = new Links(Links.SourceCategory.FUNNYS, attrib[0]);
+
+						if(!check404(attrib[0])) {
+							
+							if(attrib[1] != null) {
+								if(attrib[1].length() > 0) {
+									l.setArgs(attrib[1]);
+								}
 							}
+							LinkList.add(l);
+							counter++;
 						}
-						LinkList.add(l);
-						counter++;
 					}
 				}		
 			} else {
+				br.close();
 				return "You didn't specify what category of links you are importing. Please try 'nsfw','brolinx',or 'lolol'";
 			}
 			
+			br.close();
 			dstream.close();
 			fstream.close();
 								
