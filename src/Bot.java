@@ -760,6 +760,8 @@ public class Bot extends PircBot {
 			String line;
 			int counter = 0;
 
+			List<Links> templist = new ArrayList<Links>();
+			
 			if(args[1].equalsIgnoreCase("nsfw")) {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
@@ -772,7 +774,7 @@ public class Bot extends PircBot {
 									l.setArgs(attrib[1]);
 								}
 							}
-							LinkList.add(l);
+							templist.add(l);
 							counter++;
 						}
 					}
@@ -789,7 +791,7 @@ public class Bot extends PircBot {
 									l.setArgs(attrib[1]);
 								}
 							}
-							LinkList.add(l);
+							templist.add(l);
 							counter++;
 						}
 					}
@@ -807,7 +809,7 @@ public class Bot extends PircBot {
 									l.setArgs(attrib[1]);
 								}
 							}
-							LinkList.add(l);
+							templist.add(l);
 							counter++;
 						}
 					}
@@ -820,6 +822,10 @@ public class Bot extends PircBot {
 			br.close();
 			dstream.close();
 			fstream.close();
+			
+			if(!LinkList.addAll(templist)) {
+				return "Couldn't add new links to database.";
+			}
 								
 			if(SaveList("links")) {
 				return Integer.toString(counter) + " Links imported successfully.";
