@@ -45,6 +45,7 @@ public class Bot extends PircBot {
 	private List<String[]> TagAliases = new ArrayList<String[]>();
 	public Properties botSettings = new Properties();
 	private int TorrentID = -1;
+	private boolean checking404 = false;
 	
 	public Bot() {
 		initData();
@@ -64,6 +65,7 @@ public class Bot extends PircBot {
 			public void run() {
 				List<Links> remove = new ArrayList<Links>();
 				for(Links l: LinkList) {
+					checking404 = true;
 					if(l.getCat() == Links.SourceCategory.NSFW) {
 						try {
 							if(check404(l.getLink())) {
@@ -71,6 +73,7 @@ public class Bot extends PircBot {
 							}
 						} catch (Exception e) {
 							// TODO Auto-generated catch block
+							checking404 = false;
 							e.printStackTrace();
 						}
 					}
@@ -79,6 +82,8 @@ public class Bot extends PircBot {
 				LinkList.removeAll(remove);
 				
 				SaveList("links");
+				
+				checking404 = false;
 			}
 		}, 1000*60*2, 12*60*60*1000);
 		
@@ -753,6 +758,10 @@ public class Bot extends PircBot {
 	
 	private String importLinks(String[] args) {
 		try{
+			if(checking404 == true) {
+				return "I am currently checking for dead images and deleting them. I am primitive " +
+						"so please be patient and try again in a bit";
+			}
 			FileInputStream fstream = new FileInputStream(args[2]);
 			DataInputStream dstream = new DataInputStream(fstream);
 			
@@ -767,16 +776,14 @@ public class Bot extends PircBot {
 					String[] attrib = line.split(" ");
 					if(!DupeCheck(attrib[0])) {
 						Links l = new Links(Links.SourceCategory.NSFW, attrib[0]);
-						if(!check404(attrib[0])) {
 							
-							if(attrib.length > 1) {
-								if(attrib[1].length() > 0) {
-									l.setArgs(attrib[1]);
-								}
+						if(attrib.length > 1) {
+							if(attrib[1].length() > 0) {
+								l.setArgs(attrib[1]);
 							}
-							templist.add(l);
-							counter++;
 						}
+						templist.add(l);
+						counter++;
 					}
 				}
 			} else if(args[1].equalsIgnoreCase("brolinx")) {
@@ -784,16 +791,14 @@ public class Bot extends PircBot {
 					String[] attrib = line.split(" ");
 					if(!DupeCheck(attrib[0])) {
 						Links l = new Links(Links.SourceCategory.YOUTUBE, attrib[0]);
-						if(!check404(attrib[0])) {
 							
-							if(attrib.length > 1) {
-								if(attrib[1].length() > 0) {
-									l.setArgs(attrib[1]);
-								}
+						if(attrib.length > 1) {
+							if(attrib[1].length() > 0) {
+								l.setArgs(attrib[1]);
 							}
-							templist.add(l);
-							counter++;
 						}
+						templist.add(l);
+						counter++;
 					}
 				}		
 			} else if(args[1].equalsIgnoreCase("lolol")) {
@@ -801,17 +806,14 @@ public class Bot extends PircBot {
 					String[] attrib = line.split(" ");
 					if(!DupeCheck(attrib[0])) {
 						Links l = new Links(Links.SourceCategory.FUNNYS, attrib[0]);
-
-						if(!check404(attrib[0])) {
 							
-							if(attrib.length > 1) {
-								if(attrib[1].length() > 0) {
-									l.setArgs(attrib[1]);
-								}
+						if(attrib.length > 1) {
+							if(attrib[1].length() > 0) {
+								l.setArgs(attrib[1]);
 							}
-							templist.add(l);
-							counter++;
 						}
+						templist.add(l);
+						counter++;
 					}
 				}		
 			} else {
