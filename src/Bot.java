@@ -16,6 +16,12 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.UnknownHostException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,6 +39,7 @@ import org.jibble.pircbot.Colors;
 import org.jibble.pircbot.IrcException;
 import org.jibble.pircbot.NickAlreadyInUseException;
 import org.jibble.pircbot.PircBot;
+import org.jibble.pircbot.User;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -45,14 +52,16 @@ public class Bot extends PircBot {
 	private List<String[]> TagAliases = new ArrayList<String[]>();
 	public Properties botSettings = new Properties();
 	private int TorrentID = -1;
-	private boolean checking404 = false;
+	private dbFunctions dbf = null;
 	
 	public Bot() {
+		//initialize all the data
 		initData();
+
 		// check to make sure bot_nick is set right in the settings
 		// then set the name to it, if its not set correctly the name
 		// will be "propertyError"
-		if(botSettings.getProperty("bot_nick") != "") {
+		if(botSettings.getProperty("bot_nick").toString() != "") {
 			this.setName(botSettings.getProperty("bot_nick"));
 		} else {
 			this.setName("propertyError");
@@ -63,27 +72,29 @@ public class Bot extends PircBot {
 		t.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
-				List<Links> remove = new ArrayList<Links>();
-				for(Links l: LinkList) {
-					checking404 = true;
+				List<Integer> DeadIDs = new ArrayList<Integer>();
+				List<Links> TempList = getLinkList();
+				for(Links l: TempList) {
 					if(l.getCat() == Links.SourceCategory.NSFW) {
 						try {
 							if(check404(l.getLink())) {
-								remove.add(l);
+								DeadIDs.add(l.getLinkID());
 							}
 						} catch (Exception e) {
 							// TODO Auto-generated catch block
-							checking404 = false;
 							e.printStackTrace();
 						}
 					}
 				}
 				
-				LinkList.removeAll(remove);
+				//After getting all dead links, we call on the database function to remove
+				//dead links from the database.
+				if(DeadIDs.size() > 0) {
+					dbf.removeDeadLinks(DeadIDs);
+				}
 				
-				SaveList("links");
-				
-				checking404 = false;
+				//get the newest list from database
+				LinkList = getLinkList();
 			}
 		}, 1000*60*2, 12*60*60*1000);
 		
@@ -103,110 +114,110 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	@SuppressWarnings("unchecked")
-	private void initData() {
-		// add the TagAliases for better tag checking and less tagging		
-		TagAliases.add(new String[] {"tits","boobs","boobies","tittes"});
-		TagAliases.add(new String[] {"vagina","vag","pussy","twat"});
-		TagAliases.add(new String[] {"big.boobs","big.tits","big.titties","big.boobies"});
-		TagAliases.add(new String[] {"asshole","butthole","brown.star","brownstar"});
-		TagAliases.add(new String[] {"small.boobs","small.tits","small.titties","small.boobies"});
-		
+	private void initData()  {
 		// add all our commands to the CmdList (still need to think of the right place to put this)
 		Command c = new Command();
-		c.setCmdName(".help");
+		c.setCmdName("help");
 		c.setDescription("This Command is to help users use the bot.");
-		c.setUserFlags(Command.Flags.ALL);
+		c.setUserFlags("all");
 		c.setHidden(true);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".commands");
+		c.setCmdName("commands");
 		c.setDescription("Gives you a list of all the valid commands");
-		c.setUserFlags(Command.Flags.ALL);
+		c.setUserFlags("all");
 		c.setHidden(true);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".nsfw");
+		c.setCmdName("nsfw");
 		c.setDescription("Sends a random fappage links. Optionally add a tag at the end to get more specific links (.nsfw <tag>) furthermore you can use ! to exclude the tag (.nsfw !<tag>)");
-		c.setUserFlags(Command.Flags.ALL);
+		c.setUserFlags("all");
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".shorten");
+		c.setCmdName("shorten");
 		c.setDescription(".shorten <url> | Shortens specified URL using goo.gl");
-		c.setUserFlags(Command.Flags.ALL);
+		c.setUserFlags("all");
 		c.setHidden(true);
 		c.setEnabled(false);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".identify");
+		c.setCmdName("identify");
 		c.setDescription("Identifies the bot.");
-		c.setUserFlags(Command.Flags.MOD);
+		c.setUserFlags("mod");
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".add");
+		c.setCmdName("add");
 		c.setDescription("To add a user (.add user <nick> <level>) current levels: admin,mod,user; for nsfw (.add tits <link> <tags>(optional)); for brolinx (.add brolinx <link> <genre>(optional)) genre and tags use tag formatting. no spacing just comma seperated.");
-		c.setUserFlags(Command.Flags.MOD);
+		c.setUserFlags("mod");
 		c.setHidden(true);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".brolinx");
+		c.setCmdName("brolinx");
 		c.setDescription("Gives you some sick ass bro links. Optionally add a tag at the end to get more specific links (.brolinx <tag>) furthermore you can use ! to exclude the tag (.brolinx !<tag>)");
-		c.setUserFlags(Command.Flags.ALL);
+		c.setUserFlags("all");
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".funnies");
+		c.setCmdName("funnies");
 		c.setDescription("Gives you some funny links. Optionally add a tag at the end to get more specific links (.funnies <tag>) furthermore you can use ! to exclude the tag (.funnies !<tag>)");
-		c.setUserFlags(Command.Flags.ALL);
+		c.setUserFlags("all");
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".count");
+		c.setCmdName("count");
 		c.setDescription("Shows the count of all the links in the 'database'");
-		c.setUserFlags(Command.Flags.ALL);
+		c.setUserFlags("all");
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".import");
+		c.setCmdName("import");
 		c.setDescription("For when you have a list of links and want to import them. Make sure to specify whether its brolinx, lolol, or nsfw after the command. Also make sure the format in the text file matches link then tags (i.e. .import nsfw nsfw.txt)");
-		c.setUserFlags(Command.Flags.ADMIN);
+		c.setUserFlags("admin");
 		c.setHidden(false);
-		c.setEnabled(true);
+		c.setEnabled(false);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".export");
+		c.setCmdName("export");
 		c.setDescription("For when you want to export a category of links. Make sure to specify whether its youtube, lolol, or nsfw after the command. (i.e. .export nsfw nsfw.txt)");
-		c.setUserFlags(Command.Flags.ADMIN);
+		c.setUserFlags("admin");
 		c.setHidden(false);
 		c.setEnabled(true);
 		CmdList.add(c);
 		
 		c = new Command();
-		c.setCmdName(".imdb");
+		c.setCmdName("imdb");
 		c.setDescription("Enter a movie title and get some info about the movie from IMDB. (i.e. .imdb Star Wars). optionally use the -y flag for the year (i.e. .imdb star wars -y 1977");
-		c.setUserFlags(Command.Flags.USER);
+		c.setUserFlags("user");
 		c.setHidden(false);
 		c.setEnabled(true);
+		CmdList.add(c);
+		
+		c = new Command();
+		c.setCmdName("donate");
+		c.setDescription("I've spent some time coding this and if you are feeling generous I can use your donations to upgrade my server that I host most of my projects on. If not enjoy it anyway!");
+		c.setUserFlags("all");
+		c.setHidden(true);
+		c.setEnabled(false);
 		CmdList.add(c);
 		
 		//Load settings from config file
@@ -223,66 +234,21 @@ public class Bot extends PircBot {
 			}
 		}
 		
-		//imports Links file into our LinkList
-		f = new File("links.txt");
-		if(f.exists() && f.length() != 0) {
-			try{
-				FileInputStream fis = new FileInputStream(f);
-				ObjectInputStream instream = new ObjectInputStream(fis);
-				LinkList = (ArrayList<Links>) instream.readObject();
-				instream.close();
-				fis.close();
-						
-			} catch (FileNotFoundException fnfe) {
-				fnfe.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (ClassNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-					
-		} else if(!f.exists()){
-			try {
-				f.createNewFile();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+		//activate the database driver
+		try {
+			Class.forName("org.sqlite.JDBC");
+		} catch(ClassNotFoundException cnfe) {
+			System.out.print(cnfe.getMessage());
 		}
 		
-		// Load users and levels from Users.txt
-		f = new File("users.txt");
-		if(f.exists() && f.length() != 0) {
-			try{
-				FileInputStream fis = new FileInputStream(f);
-				ObjectInputStream instream = new ObjectInputStream(fis);
-				UserLevels = (Map<String,Command.Flags>) instream.readObject();
-				instream.close();
-				fis.close();
-						
-			} catch (FileNotFoundException fnfe) {
-				fnfe.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (ClassNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-					
-		} else if(!f.exists()){
-			try {
-				f.createNewFile();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		} else if(f.length() <= 0) {
-			UserLevels.put(botSettings.getProperty("owner_nick").toLowerCase(), Command.Flags.ADMIN);
-			SaveList("users");
-		}
+		//create all the initial database structure
+		CreateInitialDatabase();
+		
+		//make an instance of your dbfunctions class to use
+		dbf = new dbFunctions();
+		
+		//we need to take all the current links in database and load them into our LinkList
+		LinkList = getLinkList();
 	}
 	
 	public void onDisconnect() {
@@ -307,7 +273,8 @@ public class Bot extends PircBot {
 		
 		if(message.equalsIgnoreCase(this.botSettings.getProperty("invite_phrase"))) {
 			this.sendInvite(sender, "#"+this.botSettings.getProperty("bot_chan"));
-		} else if(UserLevels.containsKey(sender.toLowerCase())) {
+		} else {
+			if(hasPermission(sender, "admin")) {
 			String[] args = message.split(" ");
 			switch(args[0]) {
 				case "join":
@@ -324,7 +291,7 @@ public class Bot extends PircBot {
 					
 				case "add":
 					if (UserLevels.get(sender.toLowerCase()) == Command.Flags.ADMIN) {
-						sendMessage(sender,addCommand(args,true,sender));
+						sendMessage(sender,addCommand(args,true,sender,hostname));
 					} else {
 						sendMessage(sender,"You do not have proper permissions");
 					}
@@ -351,14 +318,16 @@ public class Bot extends PircBot {
 				case "say":
 					this.sendMessage("#" + this.botSettings.getProperty("bot_chan"), message.substring(4));
 					break;
-					
+			} 
+			} else {
+				sendMessage(sender,"Nope!");
 			}
 		}
 	}
 	
 	public void onRemoveInviteOnly(String channel, String sourceNick, String sourceLogin, String sourceHostname) {
 		if(Boolean.parseBoolean(this.botSettings.getProperty("invite_only")) && 
-				channel == "#"+this.botSettings.getProperty("bot_chan")) {
+				channel.equals("#"+this.botSettings.getProperty("bot_chan"))) {
 			this.setMode(channel, "+i");
 		}
 	}
@@ -367,10 +336,10 @@ public class Bot extends PircBot {
 						String hostname, String message) {
 
 		// This will confirm the incoming message is a command
-		if(message.startsWith(".")) {
+		if(message.startsWith(getTrigger())) {
 			//for whatever reason we cant have a loop in here so at this point
 			//we know it SHOULD be a command and will call a helper function
-			doCommand(message,channel,sender);
+			doCommand(message,channel,sender,hostname);
 		}
 		
 		// Testing a little bit of "AI"
@@ -415,7 +384,6 @@ public class Bot extends PircBot {
 			}
 		}
 		
-		
 		if(Boolean.parseBoolean(botSettings.getProperty("youtube_announce"))) {
 			
 			//String pattern = "(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)[a-zA-Z0-9-_]{11}(&(.+))?";
@@ -455,12 +423,19 @@ public class Bot extends PircBot {
 		}
 			this.joinChannel("#" + botSettings.getProperty("bot_chan"));
 	}
+	private String getTrigger() {
+		if(this.botSettings.getProperty("trigger_char") != null) {
+			return this.botSettings.getProperty("trigger_char").toString();
+		} else {
+			return ".";
+		}
+	}
 	
-	private void doCommand(String cmd, String chan, String sender) {
+	private void doCommand(String cmd, String chan, String sender,String hostname) {
 		String[] args = cmd.split(" ");
 		
 		for(Command c:CmdList) {
-			if(c.getCmdName().equals(args[0])) {
+			if(c.getCmdName().equals(args[0].substring(1))) {
 				//Make sure the command is enabled before we even start
 				if(c.isEnabled() == false) {
 					sendMessage(chan,"This command is disabled.");
@@ -473,16 +448,16 @@ public class Bot extends PircBot {
 					return;
 				}
 				
-				switch(args[0]) {
-					case ".help":
+				switch(args[0].substring(1)) {
+					case "help":
 						showHelp(args,sender);
 						break;
 						
-					case ".commands":
+					case "commands":
 						showCommands(sender);
 						break;
 						
-					case ".nsfw":
+					case "nsfw":
 						if(args.length > 1)
 						{
 							sendMessage(chan,getLinks(Links.SourceCategory.NSFW,args));
@@ -492,7 +467,7 @@ public class Bot extends PircBot {
 							break;
 						}
 						
-					case ".brolinx":
+					case "brolinx":
 						if(args.length > 1)
 						{
 							sendMessage(chan,getLinks(Links.SourceCategory.YOUTUBE,args));
@@ -502,7 +477,7 @@ public class Bot extends PircBot {
 							break;
 						}
 						
-					case ".funnies":
+					case "funnies":
 						if(args.length > 1)
 						{
 							sendMessage(chan,getLinks(Links.SourceCategory.FUNNYS,args));
@@ -512,32 +487,32 @@ public class Bot extends PircBot {
 							break;
 						}
 						
-					case ".identify":
+					case "identify":
 						this.identify("zombies");
 						break;
 						
-					case ".count":
-						sendMessage(chan,getLinkCount());
+					case "count":
+						sendNotice(sender,dbf.getLinkCount());
 						break;
 						
-					case ".add":
-						if (UserLevels.get(sender.toLowerCase()) == Command.Flags.ADMIN) {
-							sendMessage(chan,addCommand(args,true,sender));
+					case "add":
+						if (dbf.getUserLevel(sender) >= 3) {
+							sendMessage(chan,addCommand(args,true,sender,chan));
 						} else {
-							sendMessage(chan,addCommand(args,false,sender));
+							sendMessage(chan,addCommand(args,false,sender,chan));
 						}
 						
 						break;
 						
-					case ".import":
+					case "import":
 						sendMessage(chan,importLinks(args));
 						break;
 						
-					case ".export":
+					case "export":
 						sendMessage(chan,exportLinks(args));
 						break;
 						
-					case ".imdb":
+					case "imdb":
 						sendMessage(chan,getIMDBdata(args));
 						break;
 				}
@@ -550,7 +525,7 @@ public class Bot extends PircBot {
 		String msg = "Help requested! If you need help with a specific command; Try .help <command name> or .commands to see a list of available commands.";
 		
 		if(args.length > 1) {
-			if(UserLevels.get(sender.toLowerCase()) == Command.Flags.ADMIN) {
+			if(dbf.getUserLevel(sender) >= 3) {
 				if(args[1].equals("configs")) {
 					Object[] keys = botSettings.keySet().toArray();
 					for(int i=0;i<keys.length;i++) {
@@ -604,7 +579,8 @@ public class Bot extends PircBot {
 			
 			Random rand = new Random();
 			if(!temp.isEmpty()) {
-				return temp.get(rand.nextInt(temp.size())).getLink();
+				Integer randInt = rand.nextInt(temp.size());
+				return temp.get(randInt).getLinkID().toString() + ". " + temp.get(randInt).getLink();
 			}
 			
 			return "Unfortunately, I couldn't locate any links that were up your alley.";
@@ -613,10 +589,10 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String getInfo(String link) {
+	private String getInfo(String lID) {
 		for(Links l:LinkList) {
-			if(link.equals(l.getLink())) {
-				return "\u0002ID:\u0002 " + LinkList.indexOf(l) + " \u0002Submitted By:\u0002 " + l.getSubmitter() + " \u0002Tags:\u0002 " + l.getArgs();
+			if(lID.equals(l.getLinkID().toString())) {
+				return "\u0002ID:\u0002 " + l.getLinkID().toString() + " \u0002Submitted By:\u0002 " + l.getSubmitter() + " \u0002Tags:\u0002 " + l.getArgs();
 			}
 		}
 		
@@ -633,38 +609,12 @@ public class Bot extends PircBot {
 	}
 	
 	private String editLink(String[] args) {
-		//edit <link> <what you are editing> <how you are editing it> <the edit> so for now edit link <tags> <add|change> newinfo or edit link <category> <funnies|nsfw|brolinx>
+		//edit <linkID> <what you are editing> <how you are editing it> <the edit> so for now edit llinkid tags <add|change> newinfo or edit linkid category <funnies|nsfw|brolinx>
 		boolean edited = false;
-		if(!args[1].isEmpty()) {
+		if(!args[1].isEmpty() || !args[2].isEmpty()) {
 			for(Links l:LinkList) {
-				if(args[1].equals(l.getLink())) {
-					switch(args[2].toString()) {
-						case "tags":
-							if(args[3].equals("add")) {
-								l.setArgs(l.getArgs() + "," + args[4].toString());
-								edited = true;
-							} else if(args[3].equals("change")) {
-								l.setArgs(args[4].toString());
-								edited = true;
-							}
-							break;
-							
-						case "category":
-							
-							if(args[3].toString() != l.returnCatString()) {
-								if(args[3].equals("funnies")) {
-									l.setCat(Links.SourceCategory.FUNNYS);
-									edited = true;
-								} else if(args[3].equals("nsfw")) {
-									l.setCat(Links.SourceCategory.NSFW);
-									edited = true;
-								} else if(args[3].equals("brolinx")) {
-									l.setCat(Links.SourceCategory.YOUTUBE);
-									edited = true;
-								}
-							}
-							break;
-					}
+				if(args[1].equals(l.getLinkID().toString())) {
+					edited = dbf.editLinks(l.getLinkID(), args, l.getArgs());
 				}
 			}
 		}
@@ -672,7 +622,7 @@ public class Bot extends PircBot {
 		if(edited == false) {
 			return "Couldn't find link or rare case that it didnt edit correctly";
 		} else {
-			SaveList("links");
+			LinkList = getLinkList();
 			return "All is well.";
 		}
 	}
@@ -692,26 +642,26 @@ public class Bot extends PircBot {
 						
 						
 						if(args[0].length == 1) {
-							//if tag contains an exclude character ! grab all tags that dont contain the tag
+							//if tag contains an exclude character ! grab all tags that don't contain the tag
 							if(args[0][0].contains("!")) {
-								if(!l.CheckTag(getTagsFromAlias(args[0][0].replace("!", "").toLowerCase()))) {
+								if(!l.CheckTag(dbf.getTagReferences(args[0][0].replace("!", "").toLowerCase()))) {
 									temp.add(l);
 								}
 							//if it doesn't contain an exclude character then grab all links that contain the tag
 							} else {
-								if(l.CheckTag(getTagsFromAlias(args[0][0].toLowerCase()))) {
+								if(l.CheckTag(dbf.getTagReferences(args[0][0].toLowerCase()))) {
 									temp.add(l);
 								}
 							}
 						} else {
 							//if tag contains an exclude character ! grab all tags that dont contain the tag
 							if(args[0][1].contains("!")) {
-								if(!l.CheckTag(getTagsFromAlias(args[0][1].replace("!", "").toLowerCase()))) {
+								if(!l.CheckTag(dbf.getTagReferences(args[0][1].replace("!", "").toLowerCase()))) {
 									temp.add(l);
 								}
 							//if it doesn't contain an exclude character then grab all links that contain the tag
 							} else {
-								if(l.CheckTag(getTagsFromAlias(args[0][1].toLowerCase()))) {
+								if(l.CheckTag(dbf.getTagReferences(args[0][1].toLowerCase()))) {
 									temp.add(l);
 								}
 							}
@@ -725,21 +675,24 @@ public class Bot extends PircBot {
 		return temp;
 	}
 	
-	private Boolean hasPermission(String sender,Command.Flags Level) {
-		Map<Command.Flags,Integer> levels = new HashMap<Command.Flags,Integer>();
-		levels.put(Command.Flags.ADMIN, 3);
-		levels.put(Command.Flags.MOD, 2);
-		levels.put(Command.Flags.USER, 1);
-		levels.put(Command.Flags.ALL, 0);
+	private Boolean hasPermission(String sender, String userlevelneeded) {
+		int usrlvl = dbf.getUserLevel(sender);
 		
-		Integer usrlvl = 0;
-		Integer cmdlvl = levels.get(Level);
-		if(UserLevels.containsKey(sender.toLowerCase())) {
-			Command.Flags flag = UserLevels.get(sender.toLowerCase());
-			usrlvl = levels.get(flag);
+		int cmdlvl = -1;
+		if(userlevelneeded.equalsIgnoreCase("admin")) {
+			cmdlvl = 3;
+		} else if(userlevelneeded.equalsIgnoreCase("mod")) {
+			cmdlvl = 2;
+		} else if(userlevelneeded.equalsIgnoreCase("user")) {
+			cmdlvl = 1;
+		} else if(userlevelneeded.equalsIgnoreCase("all")) {
+			cmdlvl = 0;
+		} else {
+			cmdlvl = -1;
 		}
+
 		
-		if(usrlvl >= cmdlvl) {
+		if(usrlvl >= cmdlvl && cmdlvl != -1) {
 			return true;
 		}
 		
@@ -758,10 +711,11 @@ public class Bot extends PircBot {
 	
 	private String importLinks(String[] args) {
 		try{
-			if(checking404 == true) {
+			/*if(checking404 == true) {
 				return "I am currently checking for dead images and deleting them. I am primitive " +
 						"so please be patient and try again in a bit";
-			}
+			}*/ // I don't think I'm primitive anymore. Marked for Deletion
+			
 			FileInputStream fstream = new FileInputStream(args[2]);
 			DataInputStream dstream = new DataInputStream(fstream);
 			
@@ -801,7 +755,7 @@ public class Bot extends PircBot {
 						counter++;
 					}
 				}		
-			} else if(args[1].equalsIgnoreCase("lolol")) {
+			} else if(args[1].equalsIgnoreCase("lolol") || args[1].equalsIgnoreCase("funnies")) {
 				while ((line = br.readLine()) != null) {
 					String[] attrib = line.split(" ");
 					if(!DupeCheck(attrib[0])) {
@@ -827,13 +781,13 @@ public class Bot extends PircBot {
 			
 			if(!LinkList.addAll(templist)) {
 				return "Couldn't add new links to database.";
-			}
-								
-			if(SaveList("links")) {
-				return Integer.toString(counter) + " Links imported successfully.";
-			} else {
-				return "There was a problem saving the links to the list.";
-			}
+			}		
+			return "Successfully Imported " + Integer.toString(counter) + " Links!";
+//			if(SaveList("links")) {
+//				return Integer.toString(counter) + " Links imported successfully.";
+//			} else {
+//				return "There was a problem saving the links to the list.";
+//			}
 			
 		} catch (Exception ex) {
 			return ex.getMessage();
@@ -895,7 +849,7 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private Boolean SaveList(String lst) {
+	/*private Boolean SaveList(String lst) {
 		try {
 			if(lst == "links") {
 				FileOutputStream fos = new FileOutputStream("links.txt");
@@ -923,17 +877,17 @@ public class Bot extends PircBot {
 			e.printStackTrace();
 			return false;
 		}
-	}
+	} */ // Shouldn't need this anymore we aren't saving any lists. Marked for deletion.
 	
-	private String addCommand(String[] args,Boolean admin,String sender) {
-		String msg = "WTF Just happened!... Ah shit there must have been an error.";
+	private String addCommand(String[] args,Boolean admin,String sender,String chan) {
+		String msg = "this shouldn't be a thing in command adding.";
 		switch(args[1]) {
 			case "user":
 				if((Boolean.parseBoolean(botSettings.getProperty("add_user_admin_only")) == true && admin == true) || Boolean.parseBoolean(botSettings.getProperty("add_user_admin_only")) == false) {
 					if(args.length < 4) {
 						msg = "you fucked something up bro. retry using .add user <username> <level>";
 					} else {
-						msg = addUser(args);
+						msg = addUser(args,chan);
 					}
 				} else {
 					msg = "You don't have proper permission to use this command.";
@@ -942,43 +896,36 @@ public class Bot extends PircBot {
 				
 			case "nsfw":
 			case "tits":
-				msg = addLinks(Links.SourceCategory.NSFW,args,sender);
+				msg = addLinks("nsfw",args,sender);
+				LinkList = getLinkList();
 				break;
 				
 			case "brolinx":
-				msg = addLinks(Links.SourceCategory.YOUTUBE,args,sender);
+				msg = addLinks("brolinx",args,sender);
+				LinkList = getLinkList();
 				break;
 				
 			case "lulz":
 			case "lolol":
 			case "lawlz":
-				msg = addLinks(Links.SourceCategory.FUNNYS,args,sender);
+				msg = addLinks("lulz",args,sender);
+				LinkList = getLinkList();
+				break;
+				
+			default:
+				msg = "That is not a proper category to add to. Please re-read the help command.";
 				break;
 		}
 		
 		return msg;
 	}
 	
-	private String addUser(String[] args) {
+	private String addUser(String[] args,String chan) {
 		try {
 			String usrlvl = args[3];
-			
-			Command.Flags flag = null;
-			if(usrlvl.equalsIgnoreCase("admin")) {
-				flag = Command.Flags.ADMIN;
-			} else if(usrlvl.equalsIgnoreCase("mod")) {
-				flag = Command.Flags.MOD;
-			} else if(usrlvl.equalsIgnoreCase("user")) {
-				flag = Command.Flags.USER;
-			}
-			
-			if(flag != null) {
-				UserLevels.put(args[2].toLowerCase(), flag);
-				if(SaveList("users")) {
-					return "User Added!";
-				} else {
-					return "There was an unexpected error.";
-				}
+			if(usrlvl.equalsIgnoreCase("admin") || usrlvl.equalsIgnoreCase("mod") || usrlvl.equalsIgnoreCase("user")) {
+				//call the function from dbf to add the user to the database
+				return dbf.addUserToDB(args[2],usrlvl);
 			} else {
 				return "Invalid user level. use 'admin', 'mod', or 'user'";
 			}
@@ -987,33 +934,23 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String addLinks(Links.SourceCategory cat,String[] args,String sender) {
-		Links l = new Links(cat,args[2]);
-		l.setSubmitter(sender);
+	private String addLinks(String cat,String[] args,String sender) {
+		String[] tempargs;
 		if(args.length > 3) {
-			l.setArgs(args[3]);
-		}
-		
-		if(DupeCheck(args[2]) == false || check404(args[2]) == false) {
-			LinkList.add(l);
-		
-			if(SaveList("links") == true) {
-				if(cat == Links.SourceCategory.NSFW) {
-					return "Future fappage added!";
-				} else if(cat == Links.SourceCategory.YOUTUBE) {
-					return "Broin' Out...SUCCESSFUL!";
-				} else {
-					return "You made some high person extremely happy!";
-				}
-			}
+			tempargs = new String[]{args[2],cat,args[3],sender};
 		} else {
-			return "Duplicate or dead link. Get better material!";
+			tempargs = new String[]{args[2],cat,sender};
 		}
 		
-		return "There was an unexpected error.";
+		if(check404(tempargs[0]) == false) {
+			return dbf.addLinkToDB(tempargs);
+		} else {
+			return "This link is dead numb nuts..come on...";
+		}
+		
 	}
 	
-	private String getLinkCount() {
+	/*private String getLinkCount() {
 		int n = 0;
 		int y = 0;
 		int l = 0;
@@ -1030,7 +967,7 @@ public class Bot extends PircBot {
 		
 		return "There are " + Integer.toString(n) + " NSFW links, " + Integer.toString(y) + 
 				" Brolinx links, and " + Integer.toString(l) + " Funnies links.";
-	}
+	}*/ //using this straight from the db. Marked for deletion.
 	
 	private Boolean check404(String strURL) {
 		HttpURLConnection conn;
@@ -1049,7 +986,7 @@ public class Bot extends PircBot {
 			e.printStackTrace();
 		} catch(UnknownHostException uhe) {
 			if(BadURLs.containsKey(strURL)) {
-				if(BadURLs.get(strURL) < 5) {
+				if(BadURLs.get(strURL) >= 5) {
 					return true;
 				} else {
 					BadURLs.put(strURL, BadURLs.get(strURL) + 1);
@@ -1064,7 +1001,7 @@ public class Bot extends PircBot {
 			e.printStackTrace();
 		}
 		
-		return true;		
+		return false;		
 	}
 	 
 	private String getIMDBdata(String[] args) {
@@ -1229,7 +1166,7 @@ public class Bot extends PircBot {
 		}
 	}
 	
-	private String[] getTagsFromAlias(String tag) {
+	/*private String[] getTagsFromAlias(String tag) {
 		for(int i=0;i<TagAliases.size();i++) {
 			for(int j=0;j<TagAliases.get(i).length;j++) {
 				if(TagAliases.get(i)[j].equalsIgnoreCase(tag)) {
@@ -1239,8 +1176,207 @@ public class Bot extends PircBot {
 		}
 		
 		return new String[] { tag };
-	}
+	} */ // think i did this correctly in the database functions. Marked for deletion.
 
+	@SuppressWarnings("unchecked")
+	private void CreateInitialDatabase() {
+		//create connection & statement variable for later use
+		Connection conn = null;
+		Statement stmnt = null;
+		
+		try {
+			//connect or create database, if this is the first time running the code itll create the database
+			conn = DriverManager.getConnection("jdbc:sqlite:brobot.db");
+			
+			stmnt = conn.createStatement();
+			stmnt.setQueryTimeout(30);
+			
+			//start creating the tables *assuming first time running the code *add if not exists for all other times
+			//create a table to keep track of the users
+			String sql = "CREATE TABLE IF NOT EXISTS tblUsers " +
+					"(adminID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+					"UserNick TEXT NOT NULL, " +
+					"UserHost TEXT, " +
+					"UserFlag TEXT NOT NULL, " +
+					"UNIQUE(UserNick))";
+			stmnt.executeUpdate(sql);
+			
+			// of course create a table to store the links
+			sql = "CREATE TABLE IF NOT EXISTS tblLinks " +
+				"(linkID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+				"LinkURL TEXT NOT NULL, " +
+				"LinkCat CHAR(10) NOT NULL, " +
+				"LinkTags TEXT, " +
+				"LinkUploader TEXT, " +
+				"UNIQUE(LinkURL))";			
+			stmnt.executeUpdate(sql);
+			
+			//this table will be to store tags "aliases"
+			sql = "CREATE TABLE IF NOT EXISTS tblTags " +
+					"(TagsID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+					"TagNickname TEXT NOT NULL, " +
+					"Tags TEXT NOT NULL, " +
+					"UNIQUE(TagNickname))";
+			stmnt.executeUpdate(sql);
+					
+			//add master user to the user table
+			sql = "INSERT OR IGNORE INTO tblUsers (UserNick,UserFlag) VALUES (?,?);";
+			PreparedStatement pstmnt = conn.prepareStatement(sql);
+			pstmnt.setString(1, botSettings.getProperty("owner_nick").toString());
+			pstmnt.setString(2, "owner");
+			pstmnt.execute();
+			
+			//add all the tag aliases to the database
+			sql = "INSERT OR IGNORE INTO tblTags (TagNickname, Tags) VALUES (?,?);";
+			pstmnt = conn.prepareStatement(sql);
+			pstmnt.setString(1, "tits");
+			pstmnt.setString(2, "tits,boobs,boobies,titties,jugs,knockers,rack");
+			pstmnt.execute();
+			
+			pstmnt.setString(1, "vagina");
+			pstmnt.setString(2, "vagina,vag,pussy,twat");
+			pstmnt.execute();
+			
+			pstmnt.setString(1, "big boobs");
+			pstmnt.setString(2, "big.boobs,big.tits,big.titties,big.boobies");
+			pstmnt.execute();
+			
+			pstmnt.setString(1, "asshole");
+			pstmnt.setString(2, "asshole,butthole,brown.star,brownstar");
+			pstmnt.execute();
+			
+			pstmnt.setString(1, "small boobs");
+			pstmnt.setString(2, "small.boobs,small.tits,small.titties,small.boobies");
+			pstmnt.execute();
+			
+			stmnt.close();
+			pstmnt.close();
+			conn.close();
+			
+		} catch(SQLException se){
+			System.out.println(se.getMessage());
+		}
+		
+		//imports old links file into the database for anybody upgrading from a new version
+		File f = new File("links.txt");
+		if(f.exists() && f.length() != 0) {
+			try{
+				FileInputStream fis = new FileInputStream(f);
+				ObjectInputStream instream = new ObjectInputStream(fis);
+				LinkList = (ArrayList<Links>) instream.readObject();
+				instream.close();
+				fis.close();
+				
+				conn = DriverManager.getConnection("jdbc:sqlite:brobot.db");
+				
+				PreparedStatement pstmnt = conn.prepareStatement("INSERT INTO " +
+						"tblLinks(LinkURL,LinkCat,LinkTags,LinkUploader) VALUES(?,?,?,?);");
+				for(Links l:LinkList) {
+					pstmnt.setString(1, l.getLink());
+					pstmnt.setString(2, l.returnCatString());
+					pstmnt.setString(3, l.getArgs());
+					pstmnt.setString(4, l.getSubmitter());
+					pstmnt.execute();
+				}
+				
+				
+				pstmnt.close();
+				conn.close();
+				
+			} catch (FileNotFoundException fnfe) {
+				fnfe.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			} catch (SQLException se) {
+				se.printStackTrace();
+			} finally {
+				f.delete();
+			}
+					
+		} 
+		
+		// Load users and levels from Users.txt to the database for the new version
+		// then delete the file to clean up the folder
+		f = new File("users.txt");
+		if(f.exists() && f.length() != 0) {
+			try{
+				FileInputStream fis = new FileInputStream(f);
+				ObjectInputStream instream = new ObjectInputStream(fis);
+				UserLevels = (Map<String,Command.Flags>) instream.readObject();
+				instream.close();
+				fis.close();
+				
+				conn = DriverManager.getConnection("jdbc:sqlite:brobot.db");
+				
+				PreparedStatement pstmnt = conn.prepareStatement("INSERT INTO " +
+						"tblUsers(UserNick,UserFlag) VALUES(?,?);");
+				for(Map.Entry<String,Command.Flags> e : UserLevels.entrySet()) {
+					//grab keys then grab values from map and then add to args
+					pstmnt.setString(1, e.getKey().toString());
+					pstmnt.setString(2, e.getValue().toString().toLowerCase());
+					pstmnt.execute();
+				}
+				
+				
+				pstmnt.close();
+				conn.close();
+						
+			} catch (FileNotFoundException fnfe) {
+				fnfe.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			} catch (SQLException se) {
+				se.printStackTrace();
+			} finally {
+				f.delete();
+			}
+					
+		}
+	}
+	
+	private List<Links> getLinkList() {
+		List<Links> TempList = new ArrayList<Links>();
+		try {
+			ResultSet rs = dbf.getLinksFromDB();
+			while(rs.next()) {
+				Links l;
+				if(rs.getString(3).equalsIgnoreCase("nsfw")) {
+					l = new Links(Links.SourceCategory.NSFW,rs.getString(2),rs.getInt(1));
+					if(rs.getString(4) != null) {
+						l.setArgs(rs.getString(4));
+					}
+					l.setSubmitter(rs.getString(5));
+					TempList.add(l);
+				} else if(rs.getString(3).equalsIgnoreCase("brolinx")) {
+					l = new Links(Links.SourceCategory.YOUTUBE,rs.getString(2),rs.getInt(1));
+					if(rs.getString(4) != null) {
+						l.setArgs(rs.getString(4));
+					}
+					l.setSubmitter(rs.getString(5));
+					TempList.add(l);
+				} else if(rs.getString(3).equalsIgnoreCase("funnies")) {
+					l = new Links(Links.SourceCategory.FUNNYS,rs.getString(2),rs.getInt(1));
+					if(rs.getString(4) != null) {
+						l.setArgs(rs.getString(4));
+					}
+					l.setSubmitter(rs.getString(5));
+					TempList.add(l);
+				} else {
+					System.out.print("There is an error in getLinkList() with the control of flow");
+				}
+			}
+			
+			return TempList;
+		} catch(SQLException se) {
+			System.out.print(se.getMessage());
+		}
+		
+		return null;
+	}
 // -----------------------------------------------------------------------------------------
 	/*private String ShortenURL(String LongURL) {
 		//url aint working look into it

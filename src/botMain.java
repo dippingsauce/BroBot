@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 
@@ -23,9 +24,17 @@ public class botMain {
 			}
 			
 		} catch(UnknownHostException uhe) {
-			
-			brobot.connect(brobot.botSettings.getProperty("irc_server"),Integer.parseInt(brobot.botSettings.getProperty("server_port")));
-			
+			while(brobot.isConnected() == false)
+			{
+				Thread.sleep(5000);
+				brobot.connect(brobot.botSettings.getProperty("irc_server"),Integer.parseInt(brobot.botSettings.getProperty("server_port")));
+			}			
+		} catch(IOException ioe) {
+			while(brobot.isConnected() == false)
+			{
+				Thread.sleep(5000);
+				brobot.connect(brobot.botSettings.getProperty("irc_server"),Integer.parseInt(brobot.botSettings.getProperty("server_port")));
+			}		
 		} catch(NickAlreadyInUseException naiue) {
 			brobot.changeNick("somebodystolemynick");
 			brobot.sendRawLine("/msg nickserv ghost " + brobot.botSettings.getProperty("bot_password"));

@@ -1,15 +1,13 @@
 public class Command {
-		
 		public enum Flags { ALL, ADMIN, USER, MOD }
-		@SuppressWarnings("unused")
 		private static final long serialVersionUID = 1L;
 		private String Name;
 		private String Description;
-		private Flags UserFlags;
+		private String UserFlags;
 		private Boolean Hidden;
 		private Boolean Enabled;
 		
-		public Command(String _name, String _desc, Flags _uf, Boolean _hidden, Boolean _enabled) {
+		public Command(String _name, String _desc, String _uf, Boolean _hidden, Boolean _enabled) {
 			Name = _name;
 			Description = _desc;
 			UserFlags = _uf;
@@ -35,10 +33,10 @@ public class Command {
 			Description = _desc;
 		}
 		
-		public Flags getUserFlags() {
+		public String getUserFlags() {
 			return UserFlags;
 		}
-		public void setUserFlags(Flags _flags) {
+		public void setUserFlags(String _flags) {
 			UserFlags = _flags;
 		}
 		

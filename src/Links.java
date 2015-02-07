@@ -6,15 +6,19 @@ public class Links implements java.io.Serializable {
 	 */
 	private static final long serialVersionUID = 1L;
 	public enum SourceCategory { NSFW,YOUTUBE,FUNNYS }
+	private int LinkID;
 	private String Link;
 	private String args;
 	private SourceCategory Cat;
 	private String Submitter;
 	
-	
 	public Links(SourceCategory _cat, String _link) {
 		Cat = _cat;
 		Link = _link;
+	}
+	public Links(SourceCategory _cat, String _link, int _id) {
+		this(_cat,_link);
+		LinkID = _id;
 	}
 	
 	public String getLink() {
@@ -45,10 +49,14 @@ public class Links implements java.io.Serializable {
 		Submitter = name;
 	}
 	
+	public Integer getLinkID() {
+		return LinkID;
+	}
+	
 	public String returnCatString() {
-		if(Cat == SourceCategory.FUNNYS) {
+		if(this.Cat == SourceCategory.FUNNYS) {
 			return "funnies";
-		} else if(Cat == SourceCategory.NSFW) {
+		} else if(this.Cat == SourceCategory.NSFW) {
 			return "nsfw";
 		} else {
 			return "brolinx";
